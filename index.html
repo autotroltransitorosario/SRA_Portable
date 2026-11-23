@@ -132,9 +132,11 @@ table{border-collapse:collapse;width:100%;min-width:1180px}
 .th-sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;border-radius:4px}
 .th-sort:hover{color:var(--fg)}
 .th-sort:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.th-sort .ar{font-size:10px;opacity:.35}
+.th-sort .ar{display:inline-flex;flex-direction:column;line-height:.8;font-size:9px;margin-left:2px}
+.th-sort .ar b{opacity:.3;font-weight:400}
+.th-sort .ar b.on{opacity:1;color:var(--focus)}
 th[aria-sort] .th-sort{color:var(--fg)}
-th[aria-sort] .th-sort .ar{opacity:1}
+th[aria-sort]{background:color-mix(in srgb,var(--focus) 12%,var(--soft))}
 td.coord{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
 th{position:sticky;top:0;z-index:1;text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 12px;white-space:nowrap;font-weight:600}
 td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
@@ -183,7 +185,6 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .leaflet-tooltip.map-lbl::before{display:none}
 .leaflet-tooltip.map-lbl.is-sel{border-color:#2F6FDE;background:#EAF1FD}
 .leaflet-tooltip.map-lbl.is-open{border-color:#000;background:#FFF7D6}
-.lbl-short .map-lbl .lbl-addr{display:none}
 .map-lbl.tone-amber{border-left-color:var(--amber-fg)}.map-lbl.tone-slate{border-left-color:var(--slate-fg)}.map-lbl.tone-green{border-left-color:var(--green-fg)}.map-lbl.tone-gray{border-left-color:var(--gray-fg)}
 .print-only{display:none}
 .print-head{padding:0 0 8px}
@@ -298,6 +299,7 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
       </div>
       <button class="btn btn-red" id="btn-new" type="button">Ingresar Reclamo</button>
       <button class="btn" id="btn-load" type="button">Cargar planilla</button>
+      <button class="btn" id="btn-print" type="button">🖨 Imprimir mapa</button>
       <details class="menu" id="menu">
         <summary class="btn">Exportar</summary>
         <div class="menu-pop">
@@ -736,7 +738,7 @@ const COLS_LIST = [['num', 'Número'], ['estado', 'Estado'], ['subtipo', 'Subtip
 function thSort([k, label]) {
   const [ck, cd] = S.sort.split('-'), on = ck === k;
   const aria = on ? ` aria-sort="${cd === 'asc' ? 'ascending' : 'descending'}"` : '';
-  return `<th${aria}><button class="th-sort" type="button" data-sort="${k}" title="Ordenar por ${esc(label)}">${esc(label)}<span class="ar" aria-hidden="true">${on ? (cd === 'asc' ? '▲' : '▼') : '▼'}</span></button></th>`;
+  return `<th${aria}><button class="th-sort" type="button" data-sort="${k}" title="Ordenar por ${esc(label)}">${esc(label)}<span class="ar" aria-hidden="true"><b class="${on && cd === 'asc' ? 'on' : ''}">▲</b><b class="${on && cd === 'desc' ? 'on' : ''}">▼</b></span></button></th>`;
 }
 function listFooter(a) {
   const nSel = a.filter(r => S.sel.has(r._uid)).length;
@@ -823,8 +825,7 @@ function leafletRender(pts) {
     LM.tiles.on('tileload', () => { LM.tileOk = true; const n = $('#tile-note'); if (n) n.hidden = true; });
     LM.tiles.on('tileerror', () => { if (!LM.tileOk && ++LM.tileErr >= 4) { const n = $('#tile-note'); if (n) n.hidden = false; } });
     if (window.ResizeObserver) new ResizeObserver(() => LM.map && LM.map.invalidateSize()).observe($('#lmap'));
-    const lblMode = () => { const el = $('#lmap'); if (el) el.classList.toggle('lbl-short', LM.map.getZoom() < 15); };
-    LM.map.on('zoomend', lblMode); lblMode();
+
   }
   LM.map.invalidateSize();
   if (LM.layer) LM.map.removeLayer(LM.layer);
@@ -1292,6 +1293,10 @@ $('#drawer').addEventListener('change', e => { if (e.target.name === 'role2') se
 $('#views').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; S.view = b.dataset.view; if (S.view === 'mapa') MAP.fit = true; renderView(); renderBulk(); });
 $('#summary').addEventListener('click', e => { const b = e.target.closest('[data-st]'); if (!b) return; const v = b.dataset.st; S.f.estado = S.f.estado === v ? '' : v; refilter(); });
 $('#btn-new').addEventListener('click', openNewClaim);
+$('#btn-print').addEventListener('click', () => {
+  if (S.view !== 'mapa') { S.view = 'mapa'; MAP.fit = true; renderView(); renderBulk(); }
+  setTimeout(printMap, hasLeaflet() ? 900 : 100); // da tiempo a que carguen el mapa base y las etiquetas
+});
 $('#btn-load').addEventListener('click', () => $('#file').click());
 $('#file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; loadFile(f); });
 $('#menu').addEventListener('click', e => { const b = e.target.closest('[data-exp]'); if (b) { $('#menu').open = false; exportData(b.dataset.exp); } });
