@@ -115,6 +115,8 @@ main{padding-block:16px 120px;display:flex;flex-direction:column;gap:14px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .toolbar input[type=search],.toolbar select,.field input,.field select,.field textarea{min-height:40px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;min-width:0;width:100%}
 .toolbar .search{flex:1 1 280px}
+.toolbar .calle{flex:0 1 190px}
+.toolbar .calle input{min-height:40px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;min-width:0;width:100%}
 .toolbar select{flex:0 1 auto;width:auto;max-width:100%}
 .chk{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 6px;font-weight:500;cursor:pointer}
 .chk input{width:18px;height:18px}
@@ -139,7 +141,7 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 
 /* mapa */
-.map-box{position:relative;height:min(68vh,640px);min-height:380px;background:var(--soft);touch-action:none}
+.map-box{position:relative;height:600px;background:var(--soft);touch-action:none}
 #map-svg{width:100%;height:100%;display:block;cursor:grab}
 #map-svg:active{cursor:grabbing}
 .dot{stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:pointer}
@@ -219,6 +221,7 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
   dl.kv{grid-template-columns:1fr}
   dl.kv dt{margin-top:4px}
   .map-note{display:none}
+  .map-box{height:460px}
 }
 @media (prefers-reduced-motion:no-preference){
   .drawer{animation:slidein .18s ease-out}
@@ -269,6 +272,8 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
     <label class="search"><span class="sr">Buscar</span><input id="q" type="search" placeholder="Buscar por número, calle, barrio, equipo o descripción" autocomplete="off"></label>
     <select id="f-subtipo" aria-label="Subtipo"></select>
     <select id="f-distrito" aria-label="Distrito"></select>
+    <select id="f-vecinal" aria-label="Vecinal"></select>
+    <label class="calle"><span class="sr">Calle</span><input id="f-calle" type="search" list="dl-fcalle" placeholder="Calle" autocomplete="off"></label><datalist id="dl-fcalle"></datalist>
     <select id="f-origen" aria-label="Origen"></select>
     <select id="f-equipo" aria-label="Equipo"></select>
     <label class="chk"><input type="checkbox" id="f-reit">Con reiteraciones</label>
@@ -474,8 +479,8 @@ function installData(built, name, events, isSample) {
   NEEDED_OUT.forEach(k => { if (!used.has(k)) cols.push({header: k, key: k}); });
   S.outCols = cols;
   S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.page = 1;
-  S.f = {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false};
-  $('#q').value = ''; $('#f-reit').checked = false;
+  S.f = {q:'', estado:'', subtipo:'', distrito:'', vecinal:'', calle:'', origen:'', equipo:'', reit:false};
+  $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false;
   MAP.fit = true;
 }
 function showMsgs(html) { $('#msgs').innerHTML = html || ''; }
@@ -562,11 +567,13 @@ function hay(r) {
   return r._hay;
 }
 function filtered() {
-  const f = S.f, q = norm(f.q);
+  const f = S.f, q = norm(f.q), cq = norm(f.calle);
   let a = S.rows.filter(r => {
     if (f.estado === '__otros' ? STATES.includes(r['Estado detallado']) : f.estado && r['Estado detallado'] !== f.estado) return false;
     if (f.subtipo && r['Subtipo'] !== f.subtipo) return false;
     if (f.distrito && r['Distrito'] !== f.distrito) return false;
+    if (f.vecinal && r['Vecinal'] !== f.vecinal) return false;
+    if (cq && !norm(r['Calle']).includes(cq)) return false;
     if (f.origen && r['Origen'] !== f.origen) return false;
     if (f.equipo && r['Último equipo asignado'] !== f.equipo) return false;
     if (f.reit && !(Number(r['Reiteraciones']) > 0)) return false;
@@ -590,6 +597,8 @@ function fillSelect(id, label, values) {
 function populateFilters() {
   fillSelect('#f-subtipo', 'Todos los subtipos', S.rows.map(r => r['Subtipo']));
   fillSelect('#f-distrito', 'Todos los distritos', S.rows.map(r => r['Distrito']));
+  fillSelect('#f-vecinal', 'Todas las vecinales', S.rows.map(r => r['Vecinal']));
+  $('#dl-fcalle').innerHTML = sortEs(uniq(S.rows.map(r => r['Calle']))).map(v => `<option value="${esc(v)}">`).join('');
   fillSelect('#f-origen', 'Todos los orígenes', S.rows.map(r => r['Origen']));
   fillSelect('#f-equipo', 'Todos los equipos', S.rows.map(r => r['Último equipo asignado']));
 }
@@ -667,8 +676,14 @@ function renderMap() {
   const svg = $('#map-svg');
   svg.innerHTML = pts.map(r => `<circle class="dot${r._uid === S.open ? ' sel' : ''}" data-uid="${r._uid}" data-tone="${TONE[r['Estado detallado']] || 'gray'}" cx="${r._x}" cy="${-r._y}" r="6"/>`).join('');
   mapMeasure();
-  if (MAP.fit) mapFit();
+  if (MAP.fit) { mapFit(); MAP.moved = false; }
   mapApply();
+  /* si el contenedor cambia de tamaño (o termina de acomodarse), se vuelve a medir */
+  if (MAP.ro) MAP.ro.disconnect();
+  if (window.ResizeObserver) {
+    MAP.ro = new ResizeObserver(() => { const w = MAP.W, h = MAP.H; mapMeasure(); if (Math.abs(w - MAP.W) < 1 && Math.abs(h - MAP.H) < 1) return; if (!MAP.moved) mapFit(); mapApply(); });
+    MAP.ro.observe($('#map-box'));
+  }
 }
 function mapMeasure() { const el = $('#map-svg'); if (!el) return; const b = el.getBoundingClientRect(); MAP.W = b.width || 800; MAP.H = b.height || 500; }
 function mapFit() {
@@ -690,7 +705,7 @@ function mapApply() {
 function mapZoom(factor, px, py) {
   const wx = MAP.cx + (px - MAP.W / 2) * MAP.mpp, wy = MAP.cy + (py - MAP.H / 2) * MAP.mpp;
   MAP.mpp = Math.min(Math.max(MAP.mpp * factor, 0.2), 400);
-  MAP.cx = wx - (px - MAP.W / 2) * MAP.mpp; MAP.cy = wy - (py - MAP.H / 2) * MAP.mpp;
+  MAP.cx = wx - (px - MAP.W / 2) * MAP.mpp; MAP.cy = wy - (py - MAP.H / 2) * MAP.mpp; MAP.moved = true;
   mapApply();
 }
 function bindMap() {
@@ -703,7 +718,7 @@ function bindMap() {
     if (d) {
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
-      if (d.moved) { MAP.cx = d.cx - dx * MAP.mpp; MAP.cy = d.cy - dy * MAP.mpp; mapApply(); }
+      if (d.moved) { MAP.moved = true; MAP.cx = d.cx - dx * MAP.mpp; MAP.cy = d.cy - dy * MAP.mpp; mapApply(); }
       return;
     }
     const c = e.target.closest && e.target.closest('circle.dot'), tip = $('#tip');
@@ -721,7 +736,7 @@ function bindMap() {
   host.addEventListener('click', e => {
     const z = e.target.closest('[data-zoom]'); if (!z) return;
     const v = +z.dataset.zoom;
-    if (v === 0) { MAP.fit = true; mapMeasure(); mapFit(); mapApply(); } else mapZoom(v > 0 ? 0.6 : 1.6, MAP.W / 2, MAP.H / 2);
+    if (v === 0) { MAP.moved = false; mapMeasure(); mapFit(); mapApply(); } else mapZoom(v > 0 ? 0.6 : 1.6, MAP.W / 2, MAP.H / 2);
   });
 }
 
@@ -955,7 +970,7 @@ function openNewClaim() {
       S.rows.push(r); S.byUid.set(r._uid, r);
       const log = {ts: now, id: nid, numero: nnum, evento: 'Ingreso de reclamo', de: '', a: 'En curso', equipo: '', rol: S.role, obs: ''};
       S.events.push(log); commit([{uid: r._uid, created: true, log}]);
-      S.f = {q: '', estado: '', subtipo: '', distrito: '', origen: '', equipo: '', reit: false}; $('#q').value = ''; $('#f-reit').checked = false; S.sort = 'reg-desc'; $('#sort').value = 'reg-desc'; S.page = 1;
+      S.f = {q: '', estado: '', subtipo: '', distrito: '', vecinal: '', calle: '', origen: '', equipo: '', reit: false}; $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false; S.sort = 'reg-desc'; $('#sort').value = 'reg-desc'; S.page = 1;
       dlg.close(); populateFilters(); renderAll(); openDrawer(r._uid); toast(`Reclamo #${nnum} ingresado en estado EN CURSO`, true);
     };
   });
@@ -1017,7 +1032,9 @@ function refilter() { S.page = 1; MAP.fit = true; renderSummary(); renderView();
 
 let qT;
 $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.f.q = e.target.value; refilter(); }, 150); });
-[['#f-subtipo', 'subtipo'], ['#f-distrito', 'distrito'], ['#f-origen', 'origen'], ['#f-equipo', 'equipo']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.f[k] = e.target.value; refilter(); }));
+let cT;
+$('#f-calle').addEventListener('input', e => { clearTimeout(cT); cT = setTimeout(() => { S.f.calle = e.target.value; refilter(); }, 150); });
+[['#f-subtipo', 'subtipo'], ['#f-distrito', 'distrito'], ['#f-vecinal', 'vecinal'], ['#f-origen', 'origen'], ['#f-equipo', 'equipo']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.f[k] = e.target.value; refilter(); }));
 $('#f-reit').addEventListener('change', e => { S.f.reit = e.target.checked; refilter(); });
 $('#sort').addEventListener('change', e => { S.sort = e.target.value; S.page = 1; renderView(); });
 function setRole(role, fromDrawer) {
