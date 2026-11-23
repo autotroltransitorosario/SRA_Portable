@@ -170,6 +170,10 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .dot.chosen{stroke:var(--focus);stroke-width:3.5}
 .map-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .map-bar .info{color:var(--muted);font-size:13px}
+.rad{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px;background:color-mix(in srgb,#2F6FDE 10%,var(--surface));border:1px solid color-mix(in srgb,#2F6FDE 40%,var(--line));border-radius:10px;padding:3px 4px 3px 10px}
+.rad input{width:84px;min-height:30px;border:1px solid var(--line);border-radius:7px;padding:3px 8px;background:var(--surface);font-variant-numeric:tabular-nums}
+.rad-hint{flex-basis:100%;font-size:13px;color:var(--fg);background:color-mix(in srgb,#2F6FDE 9%,transparent);border-radius:8px;padding:6px 10px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.leaflet-container.rad-mode{cursor:crosshair}
 .switch{display:inline-flex;align-items:center;gap:10px;min-height:36px;cursor:pointer;font-weight:600;font-size:13.5px;user-select:none}
 .switch input{position:absolute;opacity:0;width:1px;height:1px}
 .switch .trk{position:relative;width:40px;height:22px;border-radius:999px;background:var(--line);transition:background .15s;flex:none}
@@ -190,13 +194,37 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .print-head{padding:0 0 8px}
 .print-head h2{margin:0;font:700 18px/1.2 var(--display)}
 .print-head p{margin:2px 0 0;font-size:12px;color:#333}
+/* listado de solicitudes para imprimir (mismo formato que "Listado con equipamiento") */
+#print-report{font:10px/1.3 Arial,Helvetica,sans-serif;color:#000}
+.rp-head{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:start;margin-bottom:8px}
+.rp-head .l{font-weight:700;font-size:11px;line-height:1.55}
+.rp-head .c{font-size:11px;line-height:1.55;padding-top:2px}
+.rp-head .r{text-align:right}
+.rp-head .r b{display:block;font-size:16px}
+.rp-head .r span{font-weight:700;font-size:11px}
+.rp-box{display:grid;grid-template-columns:1.1fr 1.2fr 1.2fr 1.2fr 1fr;background:#E9E9E9;border:2px solid #222;margin-bottom:10px}
+.rp-box>div{padding:5px 7px 8px;border-left:1px solid #999}
+.rp-box>div:first-child{border-left:0}
+.rp-box small{display:block;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.rp-box strong{display:block;font-size:12.5px;line-height:1.25;text-transform:uppercase}
+table.rp{width:100%;min-width:0;border-collapse:collapse;table-layout:fixed}
+table.rp th{position:static;background:#fff;color:#000;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;text-align:center;border:1px solid #444;padding:4px;white-space:normal}
+table.rp td{border:1px solid #444;padding:3px 4px;vertical-align:top;font-size:9.5px;overflow-wrap:anywhere}
+table.rp td.ctr{text-align:center}
+table.rp tbody{break-inside:avoid}
+table.rp tr.desc td{font-size:9.5px}
+table.rp tbody tr:hover{background:none}
 @media print{
-  @page{size:landscape;margin:10mm}
+  @page{size:A4 landscape;margin:10mm 10mm 14mm}
+  body.print-report > :not(#print-report):not(main){display:none!important}
+  body.print-report:not(.print-map) > main{display:none!important}
+  body.print-report.print-map > main{break-before:page}
+  body.print-report #print-report{display:block}
   body.print-map{background:#fff!important;color:#000}
   body.print-map::before,body.print-map .top,body.print-map #status,body.print-map #msgs,body.print-map #summary,body.print-map .toolbar,body.print-map #view-lista,body.print-map #view-eventos,body.print-map .map-bar,body.print-map #bulk,body.print-map #toast,body.print-map #drawer,body.print-map #scrim,body.print-map .leaflet-control-zoom,body.print-map #tile-note,body.print-map .map-tools,body.print-map .map-note{display:none!important}
   body.print-map main{padding:0!important;max-width:none}
   body.print-map #view-mapa{border:0;border-radius:0;overflow:visible;zoom:var(--pz,1)}
-  body.print-map .print-only{display:block}
+  body.print-map #map-print-head{display:block}
   body.print-map .map-box{width:var(--pw)!important;height:var(--ph)!important;border:1px solid #888;break-inside:avoid}
   body.print-map *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
@@ -279,6 +307,7 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
 }
 </style>
 
+<div id="print-report" class="print-only"></div>
 <header class="top">
   <div class="wrap top-in">
     <div class="brand">
@@ -354,6 +383,7 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <div id="dropveil" class="dropveil" hidden>Soltá la planilla (.xlsx o .csv) para cargarla</div>
 <dialog id="dlg"></dialog>
+<style id="print-page-style"></style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -494,9 +524,9 @@ const S = {
   fileName: '', sample: false, rev: 0, savedRev: 0,
   f: {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false}, sort: 'reg-desc',
   sel: new Set(), open: null, role: 'Operador', view: 'lista', opener: null,
-  cluster: false, onlySel: false, labels: true
+  cluster: false, onlySel: false, labels: true, radiusM: 300, radius: null
 };
-try { S.cluster = localStorage.getItem('sra-cluster') === '1'; S.labels = localStorage.getItem('sra-labels') !== '0'; } catch (e) {}
+try { S.cluster = localStorage.getItem('sra-cluster') === '1'; S.labels = localStorage.getItem('sra-labels') !== '0'; S.radiusM = Math.max(10, +localStorage.getItem('sra-radius') || 300); } catch (e) {}
 const dirty = () => S.rev !== S.savedRev;
 
 /* ───────── carga de la planilla ───────── */
@@ -553,7 +583,7 @@ function installData(built, name, events, isSample) {
   built.headers.forEach(h => { if (h) { cols.push({header: h, key: built.hmap[h]}); used.add(built.hmap[h]); } });
   NEEDED_OUT.forEach(k => { if (!used.has(k)) cols.push({header: k, key: k}); });
   S.outCols = cols;
-  S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.onlySel = false;
+  S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.onlySel = false; S.radius = null;
   S.f = {q:'', estado:'', subtipo:'', distrito:'', vecinal:'', calle:'', origen:'', equipo:'', reit:false};
   $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false;
   MAP.fit = true;
@@ -749,6 +779,7 @@ function syncSelUI() {
   const a = filtered(), allSel = a.length && a.every(r => S.sel.has(r._uid)), someSel = a.some(r => S.sel.has(r._uid));
   const cb = $('#sel-all'); if (cb) { cb.checked = !!allSel; cb.indeterminate = !allSel && someSel; }
   const p = $('#view-lista .pager'); if (p) p.innerHTML = listFooter(a);
+  if (!S.sel.size) S.radius = null;
   renderBulk();
   if (S.view === 'mapa') renderMap();
 }
@@ -801,9 +832,42 @@ function renderMapBar(nBase, nPts, leaflet) {
     ${leaflet ? `<label class="switch"><input type="checkbox" role="switch" id="sw-labels" ${S.labels ? 'checked' : ''}><span class="trk" aria-hidden="true"></span><span>Etiquetas</span></label>` : ''}
     <button class="btn btn-sm" type="button" id="map-fit" ${nPts ? '' : 'disabled'}>Ver todo</button>
     <button class="btn btn-sm btn-navy" type="button" id="map-print" ${nPts ? '' : 'disabled'}>🖨 Imprimir mapa</button>
+    ${leaflet ? `<label class="rad" title="Distancia para traer los reclamos alrededor del punto marcado">📍 Radio <input type="number" id="map-radius" min="10" max="50000" step="10" value="${S.radiusM}" inputmode="numeric"> m</label>` : ''}
     <span class="info">${fmtNum(nPts)} en el mapa${nBase > nPts ? ` · ${fmtNum(nBase - nPts)} sin coordenadas` : ''}${leaflet ? ' · Shift+clic en un punto para seleccionarlo' : ''}</span>
-    <span class="legend">${legend}</span>`;
+    <span class="legend">${legend}</span>
+    ${leaflet ? radiusHint() : ''}`;
   if (act && $('#' + act)) $('#' + act).focus();
+}
+function radiusHint() {
+  if (S.radius) {
+    const n = S.sel.size;
+    return `<div class="rad-hint" role="status"><span>📍 <b>${fmtNum(n)} reclamo(s)</b> a menos de <b>${fmtNum(S.radius.m)} m</b> del punto marcado. Cambiá el radio para recalcular.</span>
+      ${n ? `<button class="btn btn-sm btn-navy" type="button" id="map-radpdf">🖨 Imprimir listado (${fmtNum(n)})</button>` : ''}
+      <button class="btn btn-sm" type="button" id="map-radclear">Quitar radio</button></div>`;
+  }
+  if (!S.sel.size) return `<div class="rad-hint">📍 Sin reclamos seleccionados: hacé clic en el mapa o en un punto para traer todos los reclamos de la lista que estén a menos de ${fmtNum(S.radiusM)} m.</div>`;
+  return '';
+}
+/* Selecciona todos los reclamos de la lista (con los filtros actuales) a menos de S.radiusM metros del punto */
+function radiusSelect(ll, keepView) {
+  const m = S.radiusM, c = L.latLng(ll);
+  const found = filtered().filter(r => r._ll && c.distanceTo(r._ll) <= m).sort((a, b) => c.distanceTo(a._ll) - c.distanceTo(b._ll));
+  S.sel = new Set(found.map(r => r._uid));
+  S.radius = {ll: [c.lat, c.lng], m};
+  S.onlySel = false;
+  afterSel();
+  if (!keepView && LM.circle) LM.map.fitBounds(LM.circle.getBounds(), {padding: [30, 30], paddingBottomRight: [30, 110]});
+  toast(found.length ? `${found.length} reclamo(s) a menos de ${fmtNum(m)} m` : `Ningún reclamo a menos de ${fmtNum(m)} m de ese punto`);
+}
+function drawRadius() {
+  if (!LM.map) return;
+  if (LM.radLayer) { LM.map.removeLayer(LM.radLayer); LM.radLayer = null; LM.circle = null; }
+  $('#lmap') && $('#lmap').classList.toggle('rad-mode', !S.sel.size);
+  if (!S.radius) return;
+  LM.circle = L.circle(S.radius.ll, {radius: S.radius.m, color: '#2F6FDE', weight: 2, dashArray: '6 5', fillColor: '#2F6FDE', fillOpacity: .07, interactive: false});
+  const center = L.circleMarker(S.radius.ll, {radius: 5, color: '#fff', weight: 2, fillColor: '#B93A2E', fillOpacity: 1, interactive: false});
+  LM.radLayer = L.layerGroup([LM.circle, center]).addTo(LM.map);
+  LM.radLayer.eachLayer(l => l.bringToBack && l.bringToBack());
 }
 function dotStyle(r) {
   const t = TONE[r['Estado detallado']] || 'gray', sel = S.sel.has(r._uid), open = r._uid === S.open;
@@ -825,6 +889,7 @@ function leafletRender(pts) {
     LM.tiles.on('tileload', () => { LM.tileOk = true; const n = $('#tile-note'); if (n) n.hidden = true; });
     LM.tiles.on('tileerror', () => { if (!LM.tileOk && ++LM.tileErr >= 4) { const n = $('#tile-note'); if (n) n.hidden = false; } });
     if (window.ResizeObserver) new ResizeObserver(() => LM.map && LM.map.invalidateSize()).observe($('#lmap'));
+    LM.map.on('click', e => { if (!S.sel.size) radiusSelect(e.latlng); });
 
   }
   LM.map.invalidateSize();
@@ -832,7 +897,7 @@ function leafletRender(pts) {
   const useCl = S.cluster && hasCluster();
   LM.layer = useCl ? L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 55, spiderfyOnMaxZoom: true, chunkedLoading: true, iconCreateFunction: cluIcon}) : L.featureGroup();
   const ms = pts.map(r => {
-    const m = L.circleMarker(r._ll, dotStyle(r)); m._uid = r._uid;
+    const m = L.circleMarker(r._ll, Object.assign(dotStyle(r), {bubblingMouseEvents: false})); m._uid = r._uid;
     if (S.labels) {
       const tone = TONE[r['Estado detallado']] || 'gray';
       m.bindTooltip(`<b>#${esc(r['Número'])}</b><span class="lbl-addr"> · ${esc(addr(r))}</span>`,
@@ -844,18 +909,21 @@ function leafletRender(pts) {
     m.on('click', e => {
       const oe = e.originalEvent || {};
       if (oe.shiftKey || oe.ctrlKey || oe.metaKey) { if (S.sel.has(r._uid)) S.sel.delete(r._uid); else S.sel.add(r._uid); afterSel(); }
+      else if (!S.sel.size) radiusSelect(r._ll);
       else openDrawer(r._uid, $('#lmap'));
     });
     return m;
   });
   if (useCl) LM.layer.addLayers(ms); else ms.forEach(m => LM.layer.addLayer(m));
   LM.layer.addTo(LM.map);
+  drawRadius();
   if (MAP.fit && ms.length) mapFitAll();
   MAP.fit = false;
 }
 function mapFitAll() {
   if (hasLeaflet() && LM.map && LM.layer) {
     const lls = LM.layer.getLayers().map(m => m.getLatLng());
+    if (LM.circle) { const cb = LM.circle.getBounds(); lls.push(cb.getSouthWest(), cb.getNorthEast()); }
     if (lls.length) LM.map.fitBounds(L.latLngBounds(lls), {paddingTopLeft: [30, 40], paddingBottomRight: [30, S.sel.size ? 100 : 30], maxZoom: 17});
   } else if ($('#map-svg')) { MAP.moved = false; mapMeasure(); mapFit(); mapApply(); }
 }
@@ -866,22 +934,126 @@ function filterSummary() {
   [['subtipo', 'Subtipo'], ['distrito', 'Distrito'], ['vecinal', 'Vecinal'], ['calle', 'Calle'], ['origen', 'Origen'], ['equipo', 'Equipo'], ['q', 'Búsqueda']].forEach(([k, l]) => { if (f[k]) out.push(`${l}: ${f[k]}`); });
   if (f.reit) out.push('Con reiteraciones');
   if (S.onlySel) out.push('Solo seleccionados');
+  if (S.radius) out.push(`Radio de ${fmtNum(S.radius.m)} m alrededor del punto marcado`);
   return out.join(' · ');
 }
 function printMap() {
-  const box = $('#view-mapa .map-box'); if (!box) return;
+  if (!prepMapPrint()) return;
+  doPrint(['print-map']);
+}
+function doPrint(classes, title) {
+  const oldTitle = document.title;
+  if (title) document.title = title;
+  document.body.classList.add(...classes);
+  const done = () => { document.body.classList.remove(...classes); document.title = oldTitle; $('#print-page-style').textContent = ''; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { try { window.print(); } catch (e) { done(); toast('Este visor no permite imprimir. Abrí la página en el navegador.'); } }, 80);
+}
+function prepMapPrint(titleTxt) {
+  const box = $('#view-mapa .map-box'); if (!box) return false;
   const b = box.getBoundingClientRect();
   const nPts = hasLeaflet() && LM.layer ? LM.layer.getLayers().length : MAP.pts.length;
   const fs = filterSummary();
-  $('#map-print-head').innerHTML = `<h2>Reclamos en el mapa</h2><p>${esc(fmtDT(new Date()))} · ${esc(S.fileName || '')} · ${fmtNum(nPts)} reclamo(s) en el mapa${fs ? ' · ' + esc(fs) : ''}</p>
+  $('#map-print-head').innerHTML = `<h2>${esc(titleTxt || 'Reclamos en el mapa')}</h2><p>${esc(fmtDT(new Date()))} · ${esc(S.fileName || '')} · ${fmtNum(nPts)} reclamo(s) en el mapa${fs ? ' · ' + esc(fs) : ''}</p>
     <p>${STATES.map(s => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 10px;background:${cssVar('--' + TONE[s] + '-fg')}"></span>${esc(s)}`).join('')}</p>`;
   const z = Math.min(1, 1040 / b.width, 640 / b.height);
   const st = document.body.style;
   st.setProperty('--pw', b.width + 'px'); st.setProperty('--ph', b.height + 'px'); st.setProperty('--pz', z);
-  document.body.classList.add('print-map');
-  const done = () => { document.body.classList.remove('print-map'); window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done);
-  setTimeout(() => { try { window.print(); } catch (e) { done(); toast('Este visor no permite imprimir. Abrí la página en el navegador.'); } }, 60);
+  return true;
+}
+
+/* ───────── listado PDF de los reclamos seleccionados ───────── */
+const PR_KEYS = ['titulo', 'origen', 'categoria', 'tecnico', 'chofer', 'movil', 'telefono', 'usuario'];
+function loadPR() { try { return JSON.parse(localStorage.getItem('sra-print') || '{}'); } catch (e) { return {}; } }
+function savePR(v) { try { localStorage.setItem('sra-print', JSON.stringify(v)); } catch (e) {} }
+function lastInterv(r) {
+  const ev = S.events.filter(e => e.id === r['Id'] && e.evento !== 'Ingreso de reclamo' && e.evento !== 'Reiteración').sort((a, b) => b.ts - a.ts)[0];
+  const tui = r['Tipo última intervención'];
+  const parts = [];
+  if (ev) parts.push(fmtDT(ev.ts));
+  if (tui || ev) parts.push(String(tui || r['Estado detallado'] || '').toUpperCase());
+  if (ev && ev.equipo) parts.push(ev.equipo);
+  if (ev && ev.obs) parts.push(ev.obs);
+  if (!ev && r['Último equipo asignado']) parts.push(r['Último equipo asignado']);
+  return parts.filter(Boolean).join(' | ');
+}
+function selRowsSorted() {
+  const t = d => isDate(d) ? d.getTime() : 0;
+  return [...S.sel].map(u => S.byUid.get(u)).filter(Boolean).sort((a, b) => t(a['Fecha hora registro']) - t(b['Fecha hora registro']) || (Number(a['Número']) || 0) - (Number(b['Número']) || 0));
+}
+function buildReport(rows, v) {
+  const now = new Date();
+  const nl = x => esc(x).replace(/,\s*/g, ',<br>');
+  const body = rows.map(r => {
+    const ubic = [addr(r), r['Intersección'] ? 'y ' + r['Intersección'] : ''].filter(Boolean).join(' ');
+    const reg = r['Fecha hora registro'];
+    const fecha = isDate(reg) ? `${pad(reg.getDate())}/${pad(reg.getMonth() + 1)}/${reg.getFullYear()}<br>${pad(reg.getHours())}:${pad(reg.getMinutes())}` : '—';
+    return `<tbody><tr>
+      <td class="ctr">${esc(r['Número'])}${r['Año'] ? ' - ' + esc(r['Año']) : ''}</td>
+      <td class="ctr">${fecha}</td>
+      <td>${esc((r['Tipo'] || 'Reclamo') + '-' + (r['Subtipo'] || ''))}</td>
+      <td>${esc(ubic)}${r['Ident. Barrio'] ? `<br><span style="color:#444">${esc(r['Ident. Barrio'])}</span>` : ''}</td>
+      <td></td>
+      <td>Fecha y hora en que vio el problema: ${esc(fmtDT(reg))} | Tipo de falla: ${esc(r['Subtipo'] || '')}${Number(r['Reiteraciones']) > 0 ? ` | Reiteraciones: ${esc(r['Reiteraciones'])}` : ''}</td>
+      <td rowspan="2">${esc(lastInterv(r))}</td>
+      <td rowspan="2"></td></tr>
+      <tr class="desc"><td colspan="6">${esc(r['Descripción'] || '')}</td></tr></tbody>`;
+  }).join('');
+  $('#print-report').innerHTML = `
+    <div class="rp-head">
+      <div class="l">Municipalidad de Rosario<br>Sistema Único de Atención<br>Listado con equipamiento</div>
+      <div class="c">${v.origen ? 'Origen: ' + esc(v.origen) + '<br>' : ''}${esc(v.categoria || '')}</div>
+      <div class="r"><b>${esc(v.titulo || '')}</b><span>${rows.length} solicitud${rows.length === 1 ? '' : 'es'}</span></div>
+    </div>
+    <div class="rp-box">
+      <div><small>Fecha y hora</small><strong>${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}<br>${pad(now.getHours())}:${pad(now.getMinutes())}</strong></div>
+      <div><small>Técnico asignado</small><strong>${nl(v.tecnico || '')}</strong></div>
+      <div><small>Chofer</small><strong>${nl(v.chofer || '')}</strong></div>
+      <div><small>Móvil</small><strong>${esc(v.movil || '')}</strong></div>
+      <div><small>Teléfono</small><strong>${esc(v.telefono || '')}</strong></div>
+    </div>
+    <table class="rp"><colgroup><col style="width:8%"><col style="width:7%"><col style="width:12%"><col style="width:12%"><col style="width:11%"><col style="width:16%"><col style="width:17%"><col style="width:17%"></colgroup>
+      <thead><tr><th>Nro</th><th>Fecha<br>Hora</th><th>Temática</th><th>Ubicación</th><th>Equipamiento</th><th>Problema</th><th>Última intervención</th><th>Observaciones</th></tr></thead>${body}</table>`;
+  const foot = `${fmtDT(now)} ${v.usuario || ''}`.trim().replace(/["\\]/g, '');
+  $('#print-page-style').textContent = `@media print{@page{@bottom-left{content:"${foot}";font:9px Arial,sans-serif}@bottom-right{content:"Página " counter(page);font:9px Arial,sans-serif}}}`;
+}
+function openPrintSel() {
+  const rows = selRowsSorted(); if (!rows.length) return toast('Seleccioná al menos un reclamo.');
+  const saved = loadPR();
+  const dist = uniq(rows.map(r => r['Distrito'])).join(' / ');
+  const v = {titulo: saved.titulo || (dist ? 'Distrito ' + dist : ''), origen: saved.origen || '', categoria: saved.categoria || 'Alumbrado Público',
+    tecnico: saved.tecnico || '', chofer: saved.chofer || '', movil: saved.movil || '', telefono: saved.telefono || '', usuario: saved.usuario || ''};
+  const nCoord = rows.filter(r => hasLeaflet() ? r._ll : r._x !== null).length;
+  const f = (id, label, ph, full) => `<div class="field${full ? ' full' : ''}"><label for="p-${id}">${label}</label><input id="p-${id}" value="${esc(v[id])}" placeholder="${esc(ph || '')}" autocomplete="off"></div>`;
+  openDlg(`<form class="dlg" id="pr-form" novalidate><h2>Imprimir PDF · ${rows.length} reclamo(s) seleccionado(s)</h2>
+    <p>Se arma el "Listado con equipamiento" ordenado por fecha. En la ventana de impresión elegí <b>Guardar como PDF</b>. Los datos del equipo quedan guardados para la próxima vez.</p>
+    <div class="grid">
+      ${f('titulo', 'Título (arriba a la derecha)', 'Distrito Subzona 2')}${f('origen', 'Origen', 'Autotrol')}
+      ${f('categoria', 'Área', 'Alumbrado Público')}${f('usuario', 'Usuario (pie de página)', 'Nombre y apellido')}
+      ${f('tecnico', 'Técnico asignado', 'Separá con coma', true)}${f('chofer', 'Chofer', 'Separá con coma', true)}
+      ${f('movil', 'Móvil', '125, 128')}${f('telefono', 'Teléfono', '125, 128')}
+    </div>
+    <label class="opt"><input type="checkbox" id="p-map" ${nCoord ? 'checked' : 'disabled'}><div><b>Agregar el mapa de los reclamos seleccionados</b><span>${nCoord ? `En una hoja aparte, con número y dirección de cada punto (${nCoord} con coordenadas).` : 'Ninguno de los seleccionados tiene coordenadas.'}</span></div></label>
+    <div class="dlg-actions"><button class="btn" type="button" id="pr-cancel">Cancelar</button><button class="btn btn-navy" type="submit">🖨 Imprimir PDF</button></div></form>`, d => {
+    $('#pr-cancel', d).onclick = () => dlg.close();
+    setTimeout(() => $('#p-tecnico', d).focus(), 0);
+    $('#pr-form', d).onsubmit = e => {
+      e.preventDefault();
+      const val = {}; PR_KEYS.forEach(k => { val[k] = ($('#p-' + k, d).value || '').trim(); });
+      savePR(val);
+      const withMap = $('#p-map', d).checked;
+      dlg.close();
+      buildReport(rows, val);
+      const now = new Date(), title = `Solicitudes_SRA_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+      if (!withMap) return doPrint(['print-report'], title);
+      // muestra en el mapa solo los seleccionados, encuadrados, y lo agrega en una hoja aparte
+      S.onlySel = true; S.labels = true; S.cluster = false; S.view = 'mapa'; MAP.fit = true;
+      if (S.open) { S.open = null; renderDrawer(); }
+      renderView(); renderBulk();
+      toast('Preparando el mapa para imprimir…');
+      setTimeout(() => { if (prepMapPrint(`Mapa de las solicitudes · ${val.titulo || ''}`.replace(/ · $/, ''))) doPrint(['print-report', 'print-map'], title); else doPrint(['print-report'], title); }, hasLeaflet() ? 1500 : 200);
+    };
+  });
 }
 function selectVisible() {
   if (!LM.map) return;
@@ -892,6 +1064,7 @@ function selectVisible() {
 }
 function afterSel() {
   if (S.onlySel && !S.sel.size) S.onlySel = false;
+  if (!S.sel.size) S.radius = null;
   if (S.view === 'lista') renderList(); else if (S.view === 'mapa') renderMap();
   renderBulk(); if (S.open) renderDrawer();
 }
@@ -899,6 +1072,12 @@ function bindMapBar() {
   const host = $('#view-mapa');
   host.addEventListener('change', e => {
     if (e.target.id === 'sw-cluster') { S.cluster = e.target.checked; try { localStorage.setItem('sra-cluster', S.cluster ? '1' : '0'); } catch (x) {} renderMap(); }
+    if (e.target.id === 'map-radius') {
+      const v = Math.round(+e.target.value);
+      if (!(v >= 10)) { e.target.value = S.radiusM; return; }
+      S.radiusM = Math.min(v, 50000); try { localStorage.setItem('sra-radius', S.radiusM); } catch (x) {}
+      if (S.radius) radiusSelect(S.radius.ll); else renderMap();
+    }
     if (e.target.id === 'sw-labels') { S.labels = e.target.checked; try { localStorage.setItem('sra-labels', S.labels ? '1' : '0'); } catch (x) {} renderMap(); }
     if (e.target.id === 'sw-onlysel') { S.onlySel = e.target.checked; MAP.fit = true; renderMap(); renderBulk(); }
   });
@@ -906,6 +1085,8 @@ function bindMapBar() {
     if (e.target.closest('#map-selvis')) selectVisible();
     if (e.target.closest('#map-fit')) mapFitAll();
     if (e.target.closest('#map-print')) printMap();
+    if (e.target.closest('#map-radclear')) { S.sel = new Set(); S.radius = null; afterSel(); }
+    if (e.target.closest('#map-radpdf')) openPrintSel();
   });
 }
 
@@ -1040,7 +1221,9 @@ function renderBulk() {
   const can = EV.asignar.roles.includes(S.role);
   b.innerHTML = `<strong>${fmtNum(n)} seleccionado(s)</strong><span>${fmtNum(elig)} pueden asignarse</span>
     <button class="btn btn-light" type="button" id="bulk-assign" ${can && elig ? '' : 'disabled'}>Nuevo evento · Asignar equipo</button>
-    ${S.view === 'lista' ? `<button class="btn btn-ghost" type="button" id="bulk-map">Ver en el mapa</button>` : ''}
+    <button class="btn btn-light" type="button" id="bulk-pdf">🖨 Imprimir PDF</button>
+    ${S.view === 'lista' ? `<button class="btn btn-ghost" type="button" id="bulk-map">Ver en el mapa</button>`
+      : `<button class="btn btn-ghost" type="button" id="bulk-only" aria-pressed="${S.onlySel}">${S.onlySel ? 'Mostrar todos' : 'Ver solo seleccionados'}</button>`}
     <button class="btn btn-ghost" type="button" id="bulk-clear">Quitar selección</button>`;
   b.hidden = false;
 }
@@ -1327,6 +1510,8 @@ $('#scrim').addEventListener('click', closeDrawer);
 $('#bulk').addEventListener('click', e => {
   if (e.target.closest('#bulk-clear')) { S.sel = new Set(); afterSel(); }
   if (e.target.closest('#bulk-assign')) openBulkAssign();
+  if (e.target.closest('#bulk-pdf')) openPrintSel();
+  if (e.target.closest('#bulk-only')) { S.onlySel = !S.onlySel; MAP.fit = true; renderMap(); renderBulk(); }
   if (e.target.closest('#bulk-map')) { S.onlySel = true; S.view = 'mapa'; MAP.fit = true; renderView(); renderBulk(); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.open && !dlg.open) closeDrawer(); });
