@@ -1,0 +1,1072 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>SRA Simulador</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Concepto: consola operativa. Barra superior fija con las acciones del sistema, tablero de estados que filtra,
+   lista/mapa/eventos al centro y ficha del reclamo como panel lateral con el próximo evento permitido. */
+:root{
+  --bg:#F4F5F8; --surface:#FFFFFF; --soft:#ECEEF3; --line:#DADEE6; --fg:#1B2333; --muted:#5A6477;
+  --focus:#2F6FDE;
+  --red:#B93A2E; --red-fg:#FFFFFF; --navy:#1A2A4A; --navy-fg:#FFFFFF;
+  --orange:#EB6D12; --orange-fg:#2B1400;
+  --amber-bg:#FBEBC8; --amber-fg:#7A5A10;
+  --slate-bg:#E4E9F5; --slate-fg:#445478;
+  --green-bg:#D9F0E3; --green-fg:#1F6B42;
+  --gray-bg:#E6E8EE; --gray-fg:#4B5567;
+  --warn-bg:#FFF4D6; --warn-fg:#6B4A00; --err-bg:#FDE8E6; --err-fg:#8A2118;
+  --shadow:0 10px 30px rgba(20,30,50,.18);
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --display:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E121A; --surface:#161B26; --soft:#1F2633; --line:#2A3345; --fg:#E8EBF2; --muted:#9BA5B9;
+  --focus:#7BA6F5; --red:#C9473A; --navy:#2F4A80; --orange-fg:#1F0F00;
+  --amber-bg:#4A3B14; --amber-fg:#F5D98F; --slate-bg:#2B3553; --slate-fg:#BFCBEC;
+  --green-bg:#1F4533; --green-fg:#9DE3BF; --gray-bg:#2A3140; --gray-fg:#B2BBCC;
+  --warn-bg:#4A3A12; --warn-fg:#F5D98F; --err-bg:#4A2220; --err-fg:#FFB4AB; --shadow:0 10px 30px rgba(0,0,0,.5);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E121A; --surface:#161B26; --soft:#1F2633; --line:#2A3345; --fg:#E8EBF2; --muted:#9BA5B9;
+  --focus:#7BA6F5; --red:#C9473A; --navy:#2F4A80; --orange-fg:#1F0F00;
+  --amber-bg:#4A3B14; --amber-fg:#F5D98F; --slate-bg:#2B3553; --slate-fg:#BFCBEC;
+  --green-bg:#1F4533; --green-fg:#9DE3BF; --gray-bg:#2A3140; --gray-fg:#B2BBCC;
+  --warn-bg:#4A3A12; --warn-fg:#F5D98F; --err-bg:#4A2220; --err-fg:#FFB4AB; --shadow:0 10px 30px rgba(0,0,0,.5);
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--font);padding-left:0;padding-right:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* barra superior */
+.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.top-in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;padding-block:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{font:700 15px var(--display);letter-spacing:.06em;background:var(--navy);color:var(--navy-fg);border-radius:8px;padding:8px 10px}
+.brand h1{margin:0;font:700 17px/1.2 var(--display)}
+.brand p{margin:0;color:var(--muted);font-size:12.5px}
+.top-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:3px;gap:2px}
+.seg label,.seg button{position:relative;cursor:pointer;border:0;background:transparent;border-radius:7px;padding:6px 11px;font-weight:600;font-size:13px;color:var(--muted);min-height:32px;display:inline-flex;align-items:center}
+.seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.seg label:has(input:checked),.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.seg label:has(input:focus-visible){outline:2px solid var(--focus)}
+.role-wrap{display:flex;align-items:center;gap:8px}
+.role-wrap span{font-size:12px;color:var(--muted);font-weight:600}
+
+/* botones */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn-red{background:var(--red);border-color:var(--red);color:var(--red-fg)}
+.btn-red:hover{background:var(--red);filter:brightness(1.1)}
+.btn-navy{background:var(--navy);border-color:var(--navy);color:var(--navy-fg)}
+.btn-navy:hover{background:var(--navy);filter:brightness(1.2)}
+.btn-orange{background:var(--orange);border-color:var(--orange);color:var(--orange-fg);border-radius:999px;font-size:15px;font-weight:700;letter-spacing:.02em}
+.btn-orange:hover{background:var(--orange);filter:brightness(1.07)}
+.btn-sm{min-height:32px;padding:4px 10px;font-size:13px}
+.link{background:none;border:0;padding:0;color:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.link:hover{text-decoration-color:currentColor}
+.btn-link{background:none;border:0;color:inherit;text-decoration:underline;font-weight:700;cursor:pointer;padding:4px 6px}
+details.menu{position:relative}
+details.menu>summary{list-style:none}
+details.menu>summary::-webkit-details-marker{display:none}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);min-width:250px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px;z-index:40;display:flex;flex-direction:column}
+.menu-pop button{border:0;background:none;text-align:left;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:500}
+.menu-pop button:hover{background:var(--soft)}
+.menu-pop hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+
+/* pills de estado: mismos colores que el mapa del reclamo */
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 11px;font-weight:600;font-size:12px;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.pill[data-tone="amber"]{background:var(--amber-bg);color:var(--amber-fg)}
+.pill[data-tone="slate"]{background:var(--slate-bg);color:var(--slate-fg)}
+.pill[data-tone="green"]{background:var(--green-bg);color:var(--green-fg)}
+.pill[data-tone="gray"]{background:var(--gray-bg);color:var(--gray-fg)}
+.pill[data-tone="orange"]{background:var(--orange);color:var(--orange-fg);font-weight:700}
+.pill.lg{font-size:16px;padding:7px 18px}
+
+main{padding-block:16px 120px;display:flex;flex-direction:column;gap:14px}
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;color:var(--muted);font-size:13px}
+.status strong{color:var(--fg)}
+.tag{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}
+.tag-warn{background:var(--warn-bg);color:var(--warn-fg)}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;border-radius:12px;background:var(--warn-bg);color:var(--warn-fg)}
+.banner.err{background:var(--err-bg);color:var(--err-fg)}
+.banner.info{background:var(--soft);color:var(--fg)}
+.banner ul{margin:4px 0 0;padding-left:18px}
+.banner .grow{flex:1 1 320px;min-width:0}
+
+/* tablero */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;min-width:0}
+.card:hover{border-color:var(--muted)}
+.card[aria-pressed="true"]{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg) inset}
+.card .n{font:700 30px/1 var(--display);font-variant-numeric:tabular-nums}
+.card .k{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.card .lbl{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+
+/* barra de filtros */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar input[type=search],.toolbar select,.field input,.field select,.field textarea{min-height:40px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;min-width:0;width:100%}
+.toolbar .search{flex:1 1 280px}
+.toolbar select{flex:0 1 auto;width:auto;max-width:100%}
+.chk{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 6px;font-weight:500;cursor:pointer}
+.chk input{width:18px;height:18px}
+.spacer{flex:1 1 0}
+
+/* tabla */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th{position:sticky;top:0;text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 12px;white-space:nowrap;font-weight:600}
+td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+tbody tr:hover{background:color-mix(in srgb,var(--soft) 60%,transparent)}
+tbody tr.is-sel{background:color-mix(in srgb,var(--amber-bg) 45%,transparent)}
+tbody tr.is-open{box-shadow:inset 3px 0 0 var(--navy)}
+.c-chk{width:36px}
+.c-chk input{width:18px;height:18px;cursor:pointer}
+td .sub{color:var(--muted);font-size:12.5px}
+td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge{display:inline-block;min-width:24px;text-align:center;border-radius:999px;background:var(--soft);padding:1px 8px;font-weight:700;font-variant-numeric:tabular-nums}
+.mod{margin-left:6px;font-size:11px;font-weight:600;color:var(--warn-fg);background:var(--warn-bg);border-radius:999px;padding:1px 7px}
+.pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+
+/* mapa */
+.map-box{position:relative;height:min(68vh,640px);min-height:380px;background:var(--soft);touch-action:none}
+#map-svg{width:100%;height:100%;display:block;cursor:grab}
+#map-svg:active{cursor:grabbing}
+.dot{stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:pointer}
+.dot[data-tone="amber"]{fill:var(--amber-bg);stroke:var(--amber-fg)}
+.dot[data-tone="slate"]{fill:var(--slate-bg);stroke:var(--slate-fg)}
+.dot[data-tone="green"]{fill:var(--green-bg);stroke:var(--green-fg)}
+.dot[data-tone="gray"]{fill:var(--gray-bg);stroke:var(--gray-fg)}
+.dot.sel{stroke:var(--fg);stroke-width:3}
+.map-tools{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px}
+.map-tools .btn{min-height:40px;min-width:40px;padding:0}
+.map-scale{position:absolute;left:12px;bottom:12px;display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--surface) 88%,transparent);padding:6px 10px;border-radius:8px}
+.map-scale i{display:block;height:6px;border:2px solid var(--fg);border-top:0}
+.map-note{position:absolute;left:12px;top:12px;max-width:60%;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--surface) 88%,transparent);padding:6px 10px;border-radius:8px}
+.tip{position:absolute;pointer-events:none;background:var(--navy);color:var(--navy-fg);padding:6px 10px;border-radius:8px;font-size:12.5px;max-width:260px;z-index:5}
+
+/* panel lateral */
+.scrim{position:fixed;inset:0;background:rgba(10,16,28,.4);z-index:50}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:60;overflow-y:auto;padding:max(16px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) 20px;display:flex;flex-direction:column;gap:18px}
+.dr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dr-head h2{margin:0;font:700 22px/1.2 var(--display)}
+.dr-head p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.sec h3{margin:0 0 8px;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.state-box{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.state-box p{margin:0;color:var(--muted)}
+.ev{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin-bottom:10px}
+.ev .why{margin:0;font-size:12.5px;color:var(--muted)}
+.ev .to{margin:0;font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+dl.kv{display:grid;grid-template-columns:minmax(110px,150px) 1fr;gap:8px 14px;margin:0}
+dl.kv dt{color:var(--muted);font-size:13px}
+dl.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.desc{white-space:pre-wrap;background:var(--soft);border-radius:10px;padding:10px 12px;margin:0;overflow-wrap:anywhere}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.hist li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.hist .when{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;grid-column:2}
+.hist .dotm{width:10px;height:10px;border-radius:50%;background:var(--navy);margin-top:6px}
+
+/* barra masiva y avisos */
+.bulk{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:45;background:var(--navy);color:var(--navy-fg);border-radius:14px;box-shadow:var(--shadow);padding:10px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;max-width:calc(100% - 32px)}
+.bulk .btn{min-height:36px}
+.bulk .btn-light{background:#fff;color:#1A2A4A;border-color:#fff}
+.bulk .btn-ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+#toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:90;background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px)}
+.dropveil{position:fixed;inset:0;z-index:100;background:color-mix(in srgb,var(--navy) 80%,transparent);color:#fff;display:flex;align-items:center;justify-content:center;font:700 26px var(--display);text-align:center;padding:24px}
+
+/* diálogos */
+dialog{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);width:min(640px,calc(100% - 24px));max-height:calc(100% - 24px)}
+dialog::backdrop{background:rgba(10,16,28,.5)}
+.dlg{padding:22px;display:flex;flex-direction:column;gap:14px}
+.dlg h2{margin:0;font:700 20px/1.25 var(--display)}
+.dlg p{margin:0;color:var(--muted)}
+.dlg-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:6px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label,.field .lab{font-size:12.5px;font-weight:600}
+.field small{color:var(--muted)}
+.field textarea{min-height:84px;resize:vertical}
+.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.opt:has(input:checked){border-color:var(--navy);background:var(--soft)}
+.opt input{margin-top:3px;width:18px;height:18px}
+.opt b{display:block}
+.opt span{color:var(--muted);font-size:13px}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.flow .arr{color:var(--muted)}
+.errmsg{color:var(--err-fg);background:var(--err-bg);border-radius:10px;padding:8px 12px;font-weight:500}
+.dup{background:var(--warn-bg);color:var(--warn-fg);border-radius:12px;padding:10px 12px}
+.dup ul{margin:6px 0;padding-left:18px}
+.dup li{margin:6px 0}
+.dup p{color:inherit}
+.drop{border:2px dashed var(--line);border-radius:14px;padding:26px 16px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+.req{font-size:13px;color:var(--muted)}
+
+@media (max-width:720px){
+  .grid{grid-template-columns:1fr}
+  .top-actions{width:100%}
+  .brand p{display:none}
+  dl.kv{grid-template-columns:1fr}
+  dl.kv dt{margin-top:4px}
+  .map-note{display:none}
+}
+@media (prefers-reduced-motion:no-preference){
+  .drawer{animation:slidein .18s ease-out}
+  @keyframes slidein{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+}
+</style>
+
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">SRA</span>
+      <div>
+        <h1>Simulador de reclamos</h1>
+        <p>Trabaja sobre tu planilla Excel o CSV, sin base de datos</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="role-wrap">
+        <span id="role-lbl">Simular rol</span>
+        <div class="seg" role="radiogroup" aria-labelledby="role-lbl" id="roles">
+          <label><input type="radio" name="role" value="Operador" checked>Operador</label>
+          <label><input type="radio" name="role" value="Supervisor">Supervisor</label>
+          <label><input type="radio" name="role" value="Laboratorio">Laboratorio</label>
+        </div>
+      </div>
+      <button class="btn btn-red" id="btn-new" type="button">Ingresar Reclamo</button>
+      <button class="btn" id="btn-load" type="button">Cargar planilla</button>
+      <details class="menu" id="menu">
+        <summary class="btn">Exportar</summary>
+        <div class="menu-pop">
+          <button type="button" data-exp="xlsx">Tabla actualizada (.xlsx)</button>
+          <button type="button" data-exp="csv">Tabla actualizada (.csv)</button>
+          <hr>
+          <button type="button" data-exp="tpl">Plantilla vacía con las columnas (.csv)</button>
+        </div>
+      </details>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt" hidden>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="status" class="status" aria-live="polite"></section>
+  <section id="msgs"></section>
+  <section id="summary" class="summary" aria-label="Reclamos por estado"></section>
+
+  <section class="toolbar" aria-label="Filtros">
+    <label class="search"><span class="sr">Buscar</span><input id="q" type="search" placeholder="Buscar por número, calle, barrio, equipo o descripción" autocomplete="off"></label>
+    <select id="f-subtipo" aria-label="Subtipo"></select>
+    <select id="f-distrito" aria-label="Distrito"></select>
+    <select id="f-origen" aria-label="Origen"></select>
+    <select id="f-equipo" aria-label="Equipo"></select>
+    <label class="chk"><input type="checkbox" id="f-reit">Con reiteraciones</label>
+    <select id="sort" aria-label="Ordenar por">
+      <option value="reg-desc">Más recientes primero</option>
+      <option value="reg-asc">Más antiguos primero</option>
+      <option value="reit-desc">Más reiteraciones</option>
+      <option value="num-asc">Número</option>
+    </select>
+    <span class="spacer"></span>
+    <div class="seg" role="group" aria-label="Vista" id="views">
+      <button type="button" data-view="lista" aria-pressed="true">Lista</button>
+      <button type="button" data-view="mapa" aria-pressed="false">Mapa</button>
+      <button type="button" data-view="eventos" aria-pressed="false">Eventos</button>
+    </div>
+  </section>
+
+  <section id="view-lista" class="panel"></section>
+  <section id="view-mapa" class="panel" hidden></section>
+  <section id="view-eventos" class="panel" hidden></section>
+</main>
+
+<div id="scrim" class="scrim" hidden></div>
+<aside id="drawer" class="drawer" aria-label="Detalle del reclamo" hidden></aside>
+<div id="bulk" class="bulk" hidden></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<div id="dropveil" class="dropveil" hidden>Soltá la planilla (.xlsx o .csv) para cargarla</div>
+<dialog id="dlg"></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ───────── utilidades ───────── */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const pad = n => String(n).padStart(2, '0');
+const isDate = d => d instanceof Date && !isNaN(d);
+const fmtDT = d => isDate(d) ? `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '—';
+const fmtISO = d => isDate(d) ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` : '';
+const stamp = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`; };
+const uniq = a => [...new Set(a.filter(v => v !== null && v !== undefined && v !== ''))];
+const sortEs = a => a.sort((x, y) => String(x).localeCompare(String(y), 'es'));
+const fmtNum = n => Number(n).toLocaleString('es-AR');
+function ageText(d) {
+  if (!isDate(d)) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 864e5);
+  return days <= 0 ? 'hoy' : `hace ${days} d`;
+}
+function parseDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 864e5));
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+  const s = String(v).trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) return new Date(+m[1], m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) return new Date(+m[3], m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  return null;
+}
+/* Las coordenadas de la planilla vienen sin punto decimal y con distinta cantidad de dígitos.
+   Se toman los primeros 7 dígitos como metros y el resto como decimales. */
+function normCoord(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const s = typeof v === 'number' ? String(v) : String(v).trim();
+  const digits = s.replace(/[^0-9]/g, '');
+  if (digits.length < 7) return null;
+  const n = parseFloat(digits.slice(0, 7) + '.' + digits.slice(7));
+  return isFinite(n) ? n : null;
+}
+function parseCSV(text) {
+  const first = text.split(/\r?\n/, 1)[0] || '';
+  const delim = [',', ';', '\t', '|'].map(d => [d, first.split(d).length - 1]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i+1] === '"') { cell += '"'; i++; } else q = false; } else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i+1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(v => v === '' ? null : v));
+}
+
+/* ───────── modelo SRA ───────── */
+const COLS = ['Id','Número','Año','Tipo','Subtipo','Categoría','Fecha hora registro','Área origen','Área derivación','Estado','Estado detallado','Origen','Distrito','Vecinal','Ident. Barrio','Reiteraciones','Solicitantes','Fecha últ. derivación','Área última derivación','Coord. X','Coord. Y','Calle','Intersección','Altura','Bis','Letra','Descripción','Tipo última intervención','Último equipo asignado'];
+const REQUIRED = ['Id','Número','Subtipo','Fecha hora registro','Estado detallado','Calle','Altura'];
+const NEEDED_OUT = ['Estado','Estado detallado','Tipo última intervención','Último equipo asignado','Reiteraciones','Solicitantes'];
+const NUM_F = ['Id','Número','Año','Reiteraciones','Solicitantes','Altura'];
+const DATE_F = ['Fecha hora registro','Fecha últ. derivación'];
+const COLMAP = Object.fromEntries(COLS.map(c => [norm(c), c]));
+const EV_HEAD = ['Fecha hora','Id','Número','Evento','Estado anterior','Estado nuevo','Equipo','Rol','Observaciones'];
+
+const STATES = ['En curso','Asignado','Reparacion','Intervenido','Robado','Cerrado'];
+const STATE_KEY = Object.fromEntries(STATES.map(s => [norm(s), s]));
+const TONE = {'En curso':'amber','Asignado':'amber','Reparacion':'slate','Intervenido':'slate','Robado':'slate','Cerrado':'green'};
+const STATE_HELP = {
+  'En curso':'Los reclamos nuevos ingresan con este estado. El próximo evento es asignarlos a un equipo.',
+  'Asignado':'Corresponde a un reclamo procesado. Es el estado que debe tener un reclamo cada vez que sale a calle.',
+  'Reparacion':'Se retira el servicio o artefacto para su reparación. El laboratorio registra el evento Reparado y después el reclamo debe asignarse nuevamente.',
+  'Intervenido':'Corresponde a un reclamo que no fue resuelto y el técnico realizó observaciones para su resolución. Debe ser asignado nuevamente.',
+  'Robado':'El técnico reportó la falta del servicio y/o la luminaria. Para continuar con su resolución requiere la intervención del Supervisor (evento Reposición).',
+  'Cerrado':'Estado final del recorrido del reclamo. El técnico resolvió el reclamo y se archiva.'
+};
+const EV = {
+  asignar:   {name:'Asignación', btn:'Nuevo evento · Asignar equipo', roles:['Operador','Supervisor'], kind:'navy', to:['Asignado']},
+  resultado: {name:'Resultado de salida', btn:'Nuevo evento · Registrar resultado', roles:['Operador','Supervisor'], kind:'navy', to:['Cerrado','Intervenido','Robado','Reparacion']},
+  reparado:  {name:'Reparado', btn:'Registrar REPARADO', roles:['Laboratorio','Supervisor'], kind:'orange', note:'Evento realizado por el laboratorio. Después el reclamo se asigna nuevamente.'},
+  reposicion:{name:'Reposición', btn:'Registrar REPOSICION', roles:['Supervisor'], kind:'orange', note:'Requiere la intervención del Supervisor. Después el reclamo se asigna nuevamente.'}
+};
+const OUTCOMES = {
+  cerrar:{label:'Resuelto, cerrar el reclamo', to:'Cerrado', tui:'Resuelto', ev:'Cierre', hint:'El técnico resolvió el reclamo y se archiva.'},
+  intervenido:{label:'No resuelto, con observaciones del técnico', to:'Intervenido', tui:'Intervenido', ev:'Intervención', hint:'Debe ser asignado nuevamente.'},
+  robado:{label:'Falta el servicio o la luminaria', to:'Robado', tui:'Robado', ev:'Robo reportado', hint:'Para continuar requiere la intervención del Supervisor.'},
+  reparacion:{label:'Se retira el servicio o artefacto para repararlo', to:'Reparacion', tui:'En reparación', ev:'Retiro a reparación', hint:'Pasa al laboratorio.'}
+};
+const DEF_SUBTIPOS = ['Sector apagado ó encendido','Lámpara apagada ó encendida','Problema con artefacto ó tulipa','Problema con columna ó cable','Tablero abierto ó dañado'];
+const DEF_ORIGENES = ['Telefónico','Rosario.gob.ar reclamos','Bot','Presencial'];
+const MUT = ['Estado','Estado detallado','Tipo última intervención','Último equipo asignado','Reiteraciones','Solicitantes'];
+
+function nextEvents(r) {
+  const tui = r['Tipo última intervención'];
+  switch (r['Estado detallado']) {
+    case 'En curso': return ['asignar'];
+    case 'Asignado': return ['resultado'];
+    case 'Reparacion': return tui === 'Reparado' ? ['asignar'] : ['reparado'];
+    case 'Intervenido': return ['asignar'];
+    case 'Robado': return tui === 'Reposición' ? ['asignar'] : ['reposicion'];
+    default: return [];
+  }
+}
+const pill = st => `<span class="pill" data-tone="${TONE[st] || 'gray'}">${esc(st || 'Sin estado')}</span>`;
+const pillEv = t => `<span class="pill" data-tone="orange">${esc(t)}</span>`;
+const addr = r => `${r['Calle'] ?? ''} ${r['Altura'] ?? ''}${r['Bis'] === 'S' ? ' bis' : ''}${r['Letra'] ? ' ' + r['Letra'] : ''}`.trim();
+
+/* ───────── estado de la aplicación ───────── */
+const S = {
+  rows: [], byUid: new Map(), nextUid: 1, headers: [], hmap: {}, outCols: [], events: [], undo: [],
+  fileName: '', sample: false, rev: 0, savedRev: 0,
+  f: {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false}, sort: 'reg-desc', page: 1, PER: 25,
+  sel: new Set(), open: null, role: 'Operador', view: 'lista', opener: null
+};
+const dirty = () => S.rev !== S.savedRev;
+
+/* ───────── carga de la planilla ───────── */
+function buildRows(matrix) {
+  const headers = (matrix[0] || []).map(h => String(h ?? '').trim());
+  const hmap = {};
+  headers.forEach(h => { if (h) hmap[h] = COLMAP[norm(h)] || h; });
+  const present = new Set(Object.values(hmap));
+  const missing = REQUIRED.filter(c => !present.has(c));
+  if (missing.length) return {error: missing};
+  const rows = [], warn = {badDate: 0, unknownState: new Set(), dupId: 0, noCoord: 0};
+  const seen = new Set();
+  for (const line of matrix.slice(1)) {
+    if (!line || line.every(v => v === null || v === undefined || v === '')) continue;
+    const r = {};
+    headers.forEach((h, i) => { if (!h) return; let v = line[i]; if (v === undefined || v === '') v = null; r[hmap[h]] = v; });
+    Object.keys(r).forEach(k => { if (typeof r[k] === 'string') r[k] = r[k].replace(/_x000d_/gi, '\r').replace(/\r+\n/g, '\n').replace(/\r/g, '\n'); });
+    NUM_F.forEach(k => { if (typeof r[k] === 'string' && r[k].trim() !== '' && !isNaN(Number(r[k].replace(',', '.')))) r[k] = Number(r[k].replace(',', '.')); });
+    DATE_F.forEach(k => { if (k in r) { const d = parseDate(r[k]); if (r[k] !== null && !d) warn.badDate++; r[k] = d; } });
+    const raw = r['Estado detallado'] ?? r['Estado'];
+    const st = STATE_KEY[norm(raw)];
+    if (st) r['Estado detallado'] = st; else { r['Estado detallado'] = raw === null ? 'En curso' : String(raw).trim(); if (raw !== null) warn.unknownState.add(String(raw).trim()); }
+    if (r['Estado'] === undefined || r['Estado'] === null) r['Estado'] = r['Estado detallado'] === 'Cerrado' ? 'Cerrado' : 'En curso';
+    if (seen.has(r['Id'])) warn.dupId++; seen.add(r['Id']);
+    r._x = normCoord(r['Coord. X']); r._y = normCoord(r['Coord. Y']);
+    rows.push(r);
+  }
+  // se descartan coordenadas muy alejadas del resto
+  const xs = rows.map(r => r._x).filter(v => v !== null).sort((a, b) => a - b);
+  const ys = rows.map(r => r._y).filter(v => v !== null).sort((a, b) => a - b);
+  if (xs.length) {
+    const mx = xs[xs.length >> 1], my = ys[ys.length >> 1];
+    rows.forEach(r => { if (r._x === null || r._y === null || Math.abs(r._x - mx) > 100000 || Math.abs(r._y - my) > 100000) { r._x = r._y = null; } });
+  }
+  warn.noCoord = rows.filter(r => r._x === null).length;
+  return {headers, hmap, rows, warn};
+}
+function parseEvents(matrix) {
+  if (!matrix || matrix.length < 2) return [];
+  const h = matrix[0].map(x => norm(x));
+  const ix = k => h.indexOf(norm(k));
+  if (EV_HEAD.some(k => ix(k) < 0)) return [];
+  return matrix.slice(1).filter(l => l && l.some(v => v !== null && v !== '')).map(l => ({
+    ts: parseDate(l[ix('Fecha hora')]) || new Date(), id: l[ix('Id')], numero: l[ix('Número')], evento: l[ix('Evento')] ?? '',
+    de: l[ix('Estado anterior')] ?? '', a: l[ix('Estado nuevo')] ?? '', equipo: l[ix('Equipo')] ?? '', rol: l[ix('Rol')] ?? '', obs: l[ix('Observaciones')] ?? ''
+  }));
+}
+function installData(built, name, events, isSample) {
+  S.rows = built.rows; S.headers = built.headers; S.hmap = built.hmap; S.fileName = name; S.sample = !!isSample;
+  S.byUid = new Map(); S.nextUid = 1;
+  S.rows.forEach(r => { r._uid = S.nextUid++; S.byUid.set(r._uid, r); });
+  const cols = []; const used = new Set();
+  built.headers.forEach(h => { if (h) { cols.push({header: h, key: built.hmap[h]}); used.add(built.hmap[h]); } });
+  NEEDED_OUT.forEach(k => { if (!used.has(k)) cols.push({header: k, key: k}); });
+  S.outCols = cols;
+  S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.page = 1;
+  S.f = {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false};
+  $('#q').value = ''; $('#f-reit').checked = false;
+  MAP.fit = true;
+}
+function showMsgs(html) { $('#msgs').innerHTML = html || ''; }
+async function loadFile(file) {
+  if (!file) return;
+  if (S.rows.length && dirty() && !S.sample) {
+    const ok = await ask('Hay cambios sin exportar', 'Si cargás otra planilla se pierden los eventos registrados en esta sesión. Exportá la tabla primero si querés conservarlos.', 'Cargar de todos modos');
+    if (!ok) return;
+  }
+  try {
+    let matrix, evMatrix = null;
+    if (/\.(csv|txt)$/i.test(file.name)) {
+      matrix = parseCSV((await file.text()).replace(/^﻿/, ''));
+    } else {
+      if (!window.XLSX) throw new Error('No se pudo cargar el lector de Excel. Revisá tu conexión o probá con un archivo .csv.');
+      /* Las fechas se leen como número de serie y se convierten acá: cellDates de SheetJS corre los segundos según la zona horaria. */
+      const wb = XLSX.read(await file.arrayBuffer(), {type: 'array', cellDates: false});
+      const main = wb.SheetNames.find(n => norm(n) !== 'eventos') || wb.SheetNames[0];
+      matrix = XLSX.utils.sheet_to_json(wb.Sheets[main], {header: 1, raw: true, defval: null, blankrows: false});
+      const evName = wb.SheetNames.find(n => norm(n) === 'eventos');
+      if (evName) evMatrix = XLSX.utils.sheet_to_json(wb.Sheets[evName], {header: 1, raw: true, defval: null, blankrows: false});
+    }
+    const built = buildRows(matrix);
+    if (built.error) {
+      showMsgs(`<div class="banner err" role="alert"><div class="grow"><strong>No se pudo cargar "${esc(file.name)}".</strong> Faltan columnas obligatorias:<ul>${built.error.map(c => `<li>${esc(c)}</li>`).join('')}</ul>Usá el mismo formato de la planilla de solicitudes o descargá la plantilla desde Exportar.</div></div>`);
+      return;
+    }
+    if (!built.rows.length) { showMsgs(`<div class="banner err" role="alert">La planilla "${esc(file.name)}" no tiene filas con datos.</div>`); return; }
+    installData(built, file.name, parseEvents(evMatrix), false);
+    const w = built.warn, items = [];
+    if (w.unknownState.size) items.push(`${w.unknownState.size} estado(s) no reconocido(s) (${[...w.unknownState].slice(0, 4).map(esc).join(', ')}). Esos reclamos se muestran sin acciones.`);
+    if (w.badDate) items.push(`${w.badDate} fecha(s) con formato no reconocido.`);
+    if (w.dupId) items.push(`${w.dupId} fila(s) con Id repetido.`);
+    if (w.noCoord) items.push(`${w.noCoord} reclamo(s) sin coordenadas válidas, no aparecen en el mapa.`);
+    showMsgs(`<div class="banner info"><div class="grow"><strong>Planilla cargada: ${fmtNum(built.rows.length)} reclamos.</strong> Los datos se procesan en este navegador y no se envían a ningún servidor.${items.length ? `<ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>` : ''}</div><button class="btn btn-sm" type="button" data-dismiss>Entendido</button></div>`);
+    populateFilters(); renderAll();
+  } catch (e) {
+    showMsgs(`<div class="banner err" role="alert">No se pudo leer el archivo: ${esc(e.message || e)}</div>`);
+  }
+}
+
+/* ───────── datos de ejemplo ───────── */
+function makeSample() {
+  const now = Date.now(), day = 864e5;
+  const T = [
+    // subtipo, calle, altura, bis, letra, barrio, distrito, origen, areaOrigen, estado, equipo, tui, reit, solic, dias, desc
+    ['Sector apagado ó encendido','SAN LORENZO',1450,'N',null,'Centro','CENTRO','Telefónico','Atención 147','En curso',null,null,0,1,1,'Sector sin luz en toda la cuadra desde ayer.'],
+    ['Lámpara apagada ó encendida','CORDOBA',3200,'N',null,'Echesortu','CENTRO','Rosario.gob.ar reclamos','Rosariogobar','En curso',null,null,2,3,6,'Lámpara apagada frente a la plaza.'],
+    ['Problema con columna ó cable','ENTRE RIOS',820,'S',null,'Pichincha','CENTRO','Telefónico','Atención 147','En curso',null,'Inspeccionado',0,1,3,'Columna inclinada, cables a baja altura.'],
+    ['Problema con artefacto ó tulipa','AV FRANCIA',2150,'N','A','Refinería','NORTE','Bot','Rosariogobar','En curso',null,null,1,2,9,'Falta la tulipa del artefacto.'],
+    ['Lámpara apagada ó encendida','BV OROÑO',900,'N',null,'Echesortu','CENTRO','Telefónico','Atención 147','En curso',null,null,0,1,0,'Se enciende de día y se apaga de noche.'],
+    ['Sector apagado ó encendido','MENDOZA',5100,'N',null,'Arroyito','NORTE','Telefónico','Atención 147','Asignado','Cuadrilla 1','En proceso',1,2,4,'Varias cuadras a oscuras.'],
+    ['Lámpara apagada ó encendida','RIOJA',1780,'N',null,'Centro','CENTRO','Rosario.gob.ar reclamos','Rosariogobar','Asignado','Cuadrilla 2','En proceso',0,1,2,'Lámpara intermitente.'],
+    ['Problema con columna ó cable','AV PELLEGRINI',1200,'N',null,'Centro','CENTRO','Telefónico','Atención 147','Asignado','Cuadrilla 1','En proceso',3,4,11,'Cable colgando sobre la vereda.'],
+    ['Problema con artefacto ó tulipa','SANTA FE',4300,'N',null,'Echesortu','CENTRO','Bot','Rosariogobar','Reparacion','Cuadrilla 2','En reparación',0,1,8,'Artefacto retirado por el equipo.'],
+    ['Problema con artefacto ó tulipa','CORRIENTES',650,'N',null,'Pichincha','CENTRO','Telefónico','Atención 147','Reparacion','Cuadrilla 1','Reparado',1,2,14,'Artefacto reparado en laboratorio, falta volver a salir a calle.'],
+    ['Lámpara apagada ó encendida','ITALIA',2230,'N',null,'Refinería','NORTE','Telefónico','Atención 147','Intervenido','Cuadrilla 2','Intervenido',2,2,7,'Observación del técnico: requiere camión con hidro.'],
+    ['Sector apagado ó encendido','URQUIZA',3400,'S',null,'Arroyito','NORTE','Rosario.gob.ar reclamos','Rosariogobar','Intervenido','Cuadrilla 1','Intervenido',0,1,5,'Observación del técnico: falta alimentación en el tablero.'],
+    ['Problema con artefacto ó tulipa','GALVEZ',1500,'N',null,'Centro','CENTRO','Bot','Rosariogobar','Robado','Cuadrilla 1','Robado',0,1,10,'El técnico reporta luminaria faltante.'],
+    ['Problema con columna ó cable','BALCARCE',2700,'N','B','Echesortu','CENTRO','Telefónico','Atención 147','Robado','Cuadrilla 2','Reposición',1,2,16,'Reposición autorizada, falta asignar.'],
+    ['Lámpara apagada ó encendida','TUCUMAN',1900,'N',null,'Centro','CENTRO','Telefónico','Atención 147','Cerrado','Cuadrilla 1','Resuelto',0,1,12,'Se reemplazó la lámpara.'],
+    ['Sector apagado ó encendido','LAPRIDA',2800,'N',null,'Refinería','NORTE','Rosario.gob.ar reclamos','Rosariogobar','Cerrado','Cuadrilla 2','Resuelto',1,2,13,'Se restableció el servicio.']
+  ];
+  const matrix = [COLS];
+  T.forEach((t, i) => {
+    const reg = new Date(now - t[14] * day - (i * 37 + 11) * 6e4);
+    const x = 5432000 + (i % 4) * 700 + i * 83.4, y = 6357000 + Math.floor(i / 4) * 900 + (i * 211 % 600);
+    const o = {
+      'Id': 900001 + i, 'Número': 100001 + i, 'Año': reg.getFullYear(), 'Tipo': 'Reclamo', 'Subtipo': t[0], 'Categoría': 'Alumbrado',
+      'Fecha hora registro': reg, 'Área origen': t[8], 'Área derivación': 'Alumbrado público zona 1',
+      'Estado': t[9] === 'Cerrado' ? 'Cerrado' : 'En curso', 'Estado detallado': t[9], 'Origen': t[7], 'Distrito': t[6], 'Vecinal': 'Sin Vecinal',
+      'Ident. Barrio': t[5], 'Reiteraciones': t[12], 'Solicitantes': t[13], 'Fecha últ. derivación': reg, 'Área última derivación': 'Alumbrado público zona 1',
+      'Coord. X': x, 'Coord. Y': y, 'Calle': t[1], 'Intersección': null, 'Altura': t[2], 'Bis': t[3], 'Letra': t[4], 'Descripción': t[15],
+      'Tipo última intervención': t[11], 'Último equipo asignado': t[10]
+    };
+    matrix.push(COLS.map(c => o[c] ?? null));
+  });
+  return buildRows(matrix);
+}
+
+/* ───────── filtros y orden ───────── */
+function hay(r) {
+  if (!r._hay) r._hay = norm([r['Número'], r['Id'], r['Calle'], r['Altura'], r['Intersección'], r['Ident. Barrio'], r['Vecinal'], r['Último equipo asignado'], r['Descripción']].join(' '));
+  return r._hay;
+}
+function filtered() {
+  const f = S.f, q = norm(f.q);
+  let a = S.rows.filter(r => {
+    if (f.estado === '__otros' ? STATES.includes(r['Estado detallado']) : f.estado && r['Estado detallado'] !== f.estado) return false;
+    if (f.subtipo && r['Subtipo'] !== f.subtipo) return false;
+    if (f.distrito && r['Distrito'] !== f.distrito) return false;
+    if (f.origen && r['Origen'] !== f.origen) return false;
+    if (f.equipo && r['Último equipo asignado'] !== f.equipo) return false;
+    if (f.reit && !(Number(r['Reiteraciones']) > 0)) return false;
+    if (q && !hay(r).includes(q)) return false;
+    return true;
+  });
+  const t = d => isDate(d) ? d.getTime() : 0;
+  const [k, dir] = S.sort.split('-'), m = dir === 'asc' ? 1 : -1;
+  a.sort((x, y) => {
+    if (k === 'reg') return m * (t(x['Fecha hora registro']) - t(y['Fecha hora registro']));
+    if (k === 'reit') return m * ((Number(x['Reiteraciones']) || 0) - (Number(y['Reiteraciones']) || 0)) || (t(x['Fecha hora registro']) - t(y['Fecha hora registro']));
+    return m * ((Number(x['Número']) || 0) - (Number(y['Número']) || 0));
+  });
+  return a;
+}
+function fillSelect(id, label, values) {
+  const el = $(id), cur = el.value;
+  el.innerHTML = `<option value="">${esc(label)}</option>` + sortEs(uniq(values)).map(v => `<option>${esc(v)}</option>`).join('');
+  el.value = values.includes(cur) ? cur : '';
+}
+function populateFilters() {
+  fillSelect('#f-subtipo', 'Todos los subtipos', S.rows.map(r => r['Subtipo']));
+  fillSelect('#f-distrito', 'Todos los distritos', S.rows.map(r => r['Distrito']));
+  fillSelect('#f-origen', 'Todos los orígenes', S.rows.map(r => r['Origen']));
+  fillSelect('#f-equipo', 'Todos los equipos', S.rows.map(r => r['Último equipo asignado']));
+}
+
+/* ───────── render: estado, tablero, lista ───────── */
+function renderStatus() {
+  const mods = S.rows.filter(r => r._mod).length;
+  let h = `<span>Archivo: <strong>${esc(S.fileName || '—')}</strong></span><span>${fmtNum(S.rows.length)} reclamos</span>`;
+  if (mods) h += `<span>${mods} modificado(s) en esta sesión</span>`;
+  if (dirty()) h += `<span class="tag tag-warn">Cambios sin exportar</span><button class="btn btn-sm" type="button" data-exp="xlsx">Exportar ahora</button>`;
+  if (S.undo.length) h += `<button class="btn btn-sm" type="button" id="btn-undo">Deshacer último evento</button>`;
+  $('#status').innerHTML = h;
+  const msgs = $('#msgs');
+  if (S.sample && !msgs.querySelector('.banner')) {
+    msgs.innerHTML = `<div class="banner" data-sample><div class="grow"><strong>Estás viendo datos de ejemplo.</strong> Cargá tu planilla de solicitudes (.xlsx o .csv) para trabajar con tus reclamos reales.</div><button class="btn btn-sm btn-navy" type="button" data-load>Cargar mi planilla</button></div>`;
+  }
+}
+function renderSummary() {
+  const c = Object.fromEntries(STATES.map(s => [s, 0])); let otros = 0;
+  S.rows.forEach(r => { const s = r['Estado detallado']; if (s in c) c[s]++; else otros++; });
+  const tot = S.rows.length || 1;
+  const card = (key, label, n, tone) => `<button type="button" class="card" data-st="${esc(key)}" aria-pressed="${S.f.estado === key}">
+    ${tone ? `<span class="pill" data-tone="${tone}">${esc(label)}</span>` : `<span class="lbl">${esc(label)}</span>`}
+    <span class="n">${fmtNum(n)}</span><span class="k">${Math.round(n * 100 / tot)}% del total</span></button>`;
+  let h = card('', 'Todos', S.rows.length, '');
+  STATES.forEach(s => h += card(s, s, c[s], TONE[s]));
+  if (otros) h += card('__otros', 'Sin reconocer', otros, 'gray');
+  $('#summary').innerHTML = h;
+}
+function rowHTML(r) {
+  const sel = S.sel.has(r._uid), reit = Number(r['Reiteraciones']) || 0;
+  return `<tr class="${sel ? 'is-sel' : ''}${r._uid === S.open ? ' is-open' : ''}">
+    <td class="c-chk"><input type="checkbox" data-sel="${r._uid}" aria-label="Seleccionar reclamo ${esc(r['Número'])}" ${sel ? 'checked' : ''}></td>
+    <td class="num"><button class="link" type="button" data-open="${r._uid}">#${esc(r['Número'])}</button>${r._mod ? '<span class="mod">Editado</span>' : ''}</td>
+    <td>${pill(r['Estado detallado'])}</td>
+    <td>${esc(r['Subtipo'])}<div class="sub">${esc(r['Origen'] || '')}</div></td>
+    <td>${esc(addr(r))}<div class="sub">${esc([r['Ident. Barrio'] || r['Vecinal'], r['Distrito']].filter(Boolean).join(' · '))}</div></td>
+    <td class="num">${fmtDT(r['Fecha hora registro'])}<div class="sub">${ageText(r['Fecha hora registro'])}</div></td>
+    <td class="num">${reit > 0 ? `<span class="badge">${reit}</span>` : '—'}</td>
+    <td>${esc(r['Tipo última intervención'] || '—')}</td>
+    <td>${esc(r['Último equipo asignado'] || '—')}</td></tr>`;
+}
+function renderList() {
+  const a = filtered(), pages = Math.max(1, Math.ceil(a.length / S.PER));
+  S.page = Math.min(S.page, pages);
+  const slice = a.slice((S.page - 1) * S.PER, S.page * S.PER);
+  const allSel = a.length && a.every(r => S.sel.has(r._uid)), someSel = a.some(r => S.sel.has(r._uid));
+  const body = slice.length ? slice.map(rowHTML).join('') : `<tr><td colspan="9"><div class="empty">Ningún reclamo coincide con los filtros.</div></td></tr>`;
+  $('#view-lista').innerHTML = `<div class="tbl-wrap"><table><thead><tr>
+    <th class="c-chk"><input type="checkbox" id="sel-all" aria-label="Seleccionar todos los reclamos filtrados" ${allSel ? 'checked' : ''}></th>
+    <th>Número</th><th>Estado</th><th>Subtipo</th><th>Dirección</th><th>Registro</th><th>Reit.</th><th>Última intervención</th><th>Equipo</th></tr></thead>
+    <tbody>${body}</tbody></table></div>
+    <div class="pager"><span>${a.length ? `Mostrando ${(S.page-1)*S.PER+1}–${Math.min(S.page*S.PER, a.length)} de ${fmtNum(a.length)}` : '0 reclamos'}</span>
+    <span><button class="btn btn-sm" type="button" data-pg="-1" ${S.page <= 1 ? 'disabled' : ''}>Anterior</button> <span>Página ${S.page} de ${pages}</span> <button class="btn btn-sm" type="button" data-pg="1" ${S.page >= pages ? 'disabled' : ''}>Siguiente</button></span></div>`;
+  const cb = $('#sel-all'); if (cb) cb.indeterminate = !allSel && someSel;
+}
+function renderEvents() {
+  const ev = [...S.events].sort((x, y) => (y.ts?.getTime() || 0) - (x.ts?.getTime() || 0));
+  if (!ev.length) { $('#view-eventos').innerHTML = `<div class="empty">Todavía no hay eventos. Los eventos que registres (asignaciones, resultados, reparaciones) aparecen acá y se exportan en la hoja "Eventos".</div>`; return; }
+  $('#view-eventos').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Fecha y hora</th><th>Reclamo</th><th>Evento</th><th>Estado</th><th>Equipo</th><th>Rol</th><th>Observaciones</th></tr></thead><tbody>` +
+    ev.map(e => { const r = S.rows.find(x => x['Id'] === e.id); return `<tr><td class="num">${fmtDT(e.ts)}</td><td class="num">${r ? `<button class="link" type="button" data-open="${r._uid}">#${esc(e.numero)}</button>` : '#' + esc(e.numero)}</td><td>${esc(e.evento)}</td><td>${e.de ? pill(e.de) : ''} ${e.de && e.a && e.de !== e.a ? '→ ' + pill(e.a) : (e.a && !e.de ? pill(e.a) : '')}</td><td>${esc(e.equipo || '—')}</td><td>${esc(e.rol)}</td><td>${esc(e.obs || '')}</td></tr>`; }).join('') + `</tbody></table></div>`;
+}
+
+/* ───────── mapa ───────── */
+const MAP = {cx: 0, cy: 0, mpp: 1, W: 1, H: 1, fit: true, pts: [], drag: null};
+function renderMap() {
+  const host = $('#view-mapa');
+  const pts = filtered().filter(r => r._x !== null);
+  MAP.pts = pts;
+  if (!pts.length) { host.innerHTML = `<div class="empty">Ningún reclamo filtrado tiene coordenadas para mostrar.</div>`; return; }
+  host.innerHTML = `<div class="map-box" id="map-box"><svg id="map-svg" role="img" aria-label="Ubicación de los reclamos filtrados. La lista ofrece el mismo contenido accesible por teclado."></svg>
+    <div class="map-note">Posiciones según Coord. X / Y de la planilla, sin mapa base. Norte arriba.</div>
+    <div class="map-tools"><button class="btn" type="button" data-zoom="1" aria-label="Acercar">+</button><button class="btn" type="button" data-zoom="-1" aria-label="Alejar">−</button><button class="btn" type="button" data-zoom="0" aria-label="Ver todo" title="Ver todo">⤢</button></div>
+    <div class="map-scale"><span id="scale-lbl"></span><i id="scale-bar"></i></div><div class="tip" id="tip" hidden></div></div>`;
+  const svg = $('#map-svg');
+  svg.innerHTML = pts.map(r => `<circle class="dot${r._uid === S.open ? ' sel' : ''}" data-uid="${r._uid}" data-tone="${TONE[r['Estado detallado']] || 'gray'}" cx="${r._x}" cy="${-r._y}" r="6"/>`).join('');
+  mapMeasure();
+  if (MAP.fit) mapFit();
+  mapApply();
+}
+function mapMeasure() { const el = $('#map-svg'); if (!el) return; const b = el.getBoundingClientRect(); MAP.W = b.width || 800; MAP.H = b.height || 500; }
+function mapFit() {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  MAP.pts.forEach(r => { x0 = Math.min(x0, r._x); x1 = Math.max(x1, r._x); y0 = Math.min(y0, r._y); y1 = Math.max(y1, r._y); });
+  MAP.cx = (x0 + x1) / 2; MAP.cy = -(y0 + y1) / 2;
+  MAP.mpp = Math.max(((x1 - x0) || 200) / (MAP.W - 120), ((y1 - y0) || 200) / (MAP.H - 120));
+  MAP.fit = false;
+}
+function mapApply() {
+  const svg = $('#map-svg'); if (!svg) return;
+  const w = MAP.W * MAP.mpp, h = MAP.H * MAP.mpp;
+  svg.setAttribute('viewBox', `${MAP.cx - w / 2} ${MAP.cy - h / 2} ${w} ${h}`);
+  svg.querySelectorAll('circle').forEach(c => c.setAttribute('r', (c.classList.contains('sel') ? 9 : 6.5) * MAP.mpp));
+  const nice = [5,10,20,50,100,200,500,1000,2000,5000,10000].filter(n => n / MAP.mpp <= 130).pop() || 5;
+  $('#scale-bar').style.width = (nice / MAP.mpp) + 'px';
+  $('#scale-lbl').textContent = nice >= 1000 ? `${nice / 1000} km` : `${nice} m`;
+}
+function mapZoom(factor, px, py) {
+  const wx = MAP.cx + (px - MAP.W / 2) * MAP.mpp, wy = MAP.cy + (py - MAP.H / 2) * MAP.mpp;
+  MAP.mpp = Math.min(Math.max(MAP.mpp * factor, 0.2), 400);
+  MAP.cx = wx - (px - MAP.W / 2) * MAP.mpp; MAP.cy = wy - (py - MAP.H / 2) * MAP.mpp;
+  mapApply();
+}
+function bindMap() {
+  const host = $('#view-mapa');
+  host.addEventListener('wheel', e => { const s = e.target.closest('#map-svg'); if (!s) return; e.preventDefault(); const b = s.getBoundingClientRect(); mapZoom(e.deltaY < 0 ? 0.8 : 1.25, e.clientX - b.left, e.clientY - b.top); }, {passive: false});
+  host.addEventListener('pointerdown', e => { const s = e.target.closest('#map-svg'); if (!s) return; MAP.drag = {x: e.clientX, y: e.clientY, cx: MAP.cx, cy: MAP.cy, moved: false, target: e.target}; s.setPointerCapture(e.pointerId); });
+  host.addEventListener('pointermove', e => {
+    const s = $('#map-svg'); if (!s) return;
+    const d = MAP.drag;
+    if (d) {
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
+      if (d.moved) { MAP.cx = d.cx - dx * MAP.mpp; MAP.cy = d.cy - dy * MAP.mpp; mapApply(); }
+      return;
+    }
+    const c = e.target.closest && e.target.closest('circle.dot'), tip = $('#tip');
+    if (c && tip) {
+      const r = S.byUid.get(+c.dataset.uid), b = $('#map-box').getBoundingClientRect();
+      tip.innerHTML = `<strong>#${esc(r['Número'])}</strong> · ${esc(r['Estado detallado'])}<br>${esc(addr(r))}`;
+      tip.hidden = false; tip.style.left = Math.min(e.clientX - b.left + 14, b.width - 240) + 'px'; tip.style.top = (e.clientY - b.top + 14) + 'px';
+    } else if (tip) tip.hidden = true;
+  });
+  host.addEventListener('pointerup', e => {
+    const d = MAP.drag; MAP.drag = null; if (!d) return;
+    const c = d.target.closest && d.target.closest('circle.dot');
+    if (!d.moved && c) openDrawer(+c.dataset.uid, c);
+  });
+  host.addEventListener('click', e => {
+    const z = e.target.closest('[data-zoom]'); if (!z) return;
+    const v = +z.dataset.zoom;
+    if (v === 0) { MAP.fit = true; mapMeasure(); mapFit(); mapApply(); } else mapZoom(v > 0 ? 0.6 : 1.6, MAP.W / 2, MAP.H / 2);
+  });
+}
+
+/* ───────── ficha del reclamo ───────── */
+function histFor(r) {
+  const items = S.events.filter(e => e.id === r['Id']).sort((a, b) => (a.ts?.getTime() || 0) - (b.ts?.getTime() || 0));
+  const out = [];
+  if (!items.some(e => e.evento === 'Ingreso de reclamo')) out.push({title: 'Ingreso del reclamo', sub: `Estado inicial: EN CURSO`, ts: r['Fecha hora registro']});
+  items.forEach(e => out.push({title: e.evento, sub: [e.de && e.a && e.de !== e.a ? `${e.de} → ${e.a}` : (e.a || ''), e.equipo ? 'Equipo: ' + e.equipo : '', 'Rol: ' + e.rol, e.obs ? 'Obs.: ' + e.obs : ''].filter(Boolean).join(' · '), ts: e.ts}));
+  return out;
+}
+function openDrawer(uid, opener) {
+  S.open = uid; S.opener = opener || document.activeElement;
+  renderDrawer(true); renderList(); if (S.view === 'mapa') mapMarkSel();
+}
+function closeDrawer() {
+  S.open = null; renderDrawer(); renderList(); if (S.view === 'mapa') mapMarkSel();
+  if (S.opener && S.opener.isConnected) S.opener.focus();
+}
+function mapMarkSel() { $$('#map-svg circle').forEach(c => c.classList.toggle('sel', +c.dataset.uid === S.open)); mapApply(); }
+function renderDrawer(focus) {
+  const el = $('#drawer'), r = S.byUid.get(S.open);
+  if (!r) { el.hidden = true; $('#scrim').hidden = true; return; }
+  const st = r['Estado detallado'], evs = nextEvents(r);
+  const evHTML = evs.length ? evs.map(k => {
+    const e = EV[k], ok = e.roles.includes(S.role);
+    const to = e.to ? `<p class="to">Pasa a: ${e.to.map(pill).join(' ')}</p>` : `<p class="to">${esc(e.note)}</p>`;
+    return `<div class="ev"><button class="btn ${e.kind === 'orange' ? 'btn-orange' : 'btn-navy'}" type="button" data-ev="${k}" ${ok ? '' : 'disabled'}>${esc(e.btn)}</button>${to}${ok ? '' : `<p class="why">Lo registra: ${e.roles.join(' o ')}. Cambiá el rol simulado acá arriba para probarlo.</p>`}</div>`;
+  }).join('') : `<p class="state-box">${STATES.includes(st) ? 'Este reclamo ya está cerrado: es el estado final del recorrido.' : 'El estado de este reclamo no es reconocido por el flujo, no hay eventos disponibles.'}</p>`;
+  const kv = (k, v) => v === null || v === undefined || v === '' ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`;
+  const coords = r._x !== null ? `X ${fmtNum(Math.round(r._x))} · Y ${fmtNum(Math.round(r._y))}` : 'Sin coordenadas';
+  el.innerHTML = `<div class="dr-head"><div><h2>Reclamo #${esc(r['Número'])}</h2><p>Id ${esc(r['Id'])} · ${esc(r['Tipo'] || 'Reclamo')} · ${esc(r['Categoría'] || '')}</p></div><button class="btn btn-sm" type="button" id="dr-close" aria-label="Cerrar detalle">Cerrar</button></div>
+    <div class="sec"><h3>Estado actual</h3><div class="state-box"><span class="pill lg" data-tone="${TONE[st] || 'gray'}">${esc(st)}</span><p>${esc(STATE_HELP[st] || '')}</p></div></div>
+    <div class="sec"><h3>Próximo evento</h3>
+      <div class="role-wrap" style="margin-bottom:12px"><span id="dr-role-lbl">Simular rol</span><div class="seg" role="radiogroup" aria-labelledby="dr-role-lbl" id="dr-roles">${['Operador', 'Supervisor', 'Laboratorio'].map(x => `<label><input type="radio" name="role2" value="${x}" ${S.role === x ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
+      ${evHTML}</div>
+    <div class="sec"><h3>Datos del reclamo</h3><dl class="kv">
+      ${kv('Subtipo', esc(r['Subtipo']))}${kv('Dirección', esc(addr(r)))}${kv('Intersección', esc(r['Intersección']))}
+      ${kv('Barrio', esc(r['Ident. Barrio']))}${kv('Vecinal', esc(r['Vecinal']))}${kv('Distrito', esc(r['Distrito']))}
+      ${kv('Registro', `${fmtDT(r['Fecha hora registro'])} (${ageText(r['Fecha hora registro'])})`)}
+      ${kv('Origen', esc(r['Origen']))}${kv('Área origen', esc(r['Área origen']))}${kv('Área derivación', esc(r['Área derivación']))}
+      ${kv('Últ. derivación', isDate(r['Fecha últ. derivación']) ? esc(fmtDT(r['Fecha últ. derivación'])) + (r['Área última derivación'] ? ' · ' + esc(r['Área última derivación']) : '') : '')}
+      ${kv('Reiteraciones', esc(r['Reiteraciones'] ?? 0))}${kv('Solicitantes', esc(r['Solicitantes'] ?? 1))}
+      ${kv('Última intervención', esc(r['Tipo última intervención']))}${kv('Equipo asignado', esc(r['Último equipo asignado']))}
+      ${kv('Coordenadas', coords)}</dl></div>
+    ${r['Descripción'] ? `<div class="sec"><h3>Descripción</h3><p class="desc">${esc(r['Descripción'])}</p></div>` : ''}
+    <div class="sec"><h3>Historial</h3><ol class="hist">${histFor(r).map(h => `<li><span class="dotm"></span><div><strong>${esc(h.title)}</strong><div class="sub" style="color:var(--muted);font-size:12.5px">${esc(h.sub)}</div></div><span class="when">${fmtDT(h.ts)}</span></li>`).join('')}</ol></div>`;
+  el.hidden = false; $('#scrim').hidden = false;
+  if (focus) $('#dr-close').focus();
+}
+
+/* ───────── barra de selección ───────── */
+function renderBulk() {
+  const b = $('#bulk'), n = S.sel.size;
+  if (!n || S.view !== 'lista') { b.hidden = true; return; }
+  const elig = [...S.sel].map(u => S.byUid.get(u)).filter(r => r && nextEvents(r).includes('asignar')).length;
+  const can = EV.asignar.roles.includes(S.role);
+  b.innerHTML = `<strong>${n} seleccionado(s)</strong><span>${elig} pueden asignarse</span>
+    <button class="btn btn-light" type="button" id="bulk-assign" ${can && elig ? '' : 'disabled'}>Nuevo evento · Asignar equipo</button>
+    <button class="btn btn-ghost" type="button" id="bulk-clear">Quitar selección</button>`;
+  b.hidden = false;
+}
+
+/* ───────── diálogos ───────── */
+const dlg = $('#dlg');
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+function openDlg(html, setup) {
+  dlg.returnValue = ''; dlg.innerHTML = html; if (setup) setup(dlg);
+  if (!dlg.open) dlg.showModal();
+}
+function ask(title, text, okLabel) {
+  return new Promise(res => {
+    openDlg(`<form method="dialog" class="dlg"><h2>${esc(title)}</h2><p>${esc(text)}</p><div class="dlg-actions"><button class="btn" value="no">Cancelar</button><button class="btn btn-red" value="ok">${esc(okLabel)}</button></div></form>`);
+    const on = () => { dlg.removeEventListener('close', on); res(dlg.returnValue === 'ok'); };
+    dlg.addEventListener('close', on);
+  });
+}
+let toastT;
+function toast(msg, undo) {
+  const t = $('#toast');
+  t.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button class="btn-link" type="button" id="toast-undo">Deshacer</button>' : ''}`;
+  t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 7000);
+  if (undo) $('#toast-undo').onclick = () => { undoLast(); t.hidden = true; };
+}
+const equipoList = () => { const l = sortEs(uniq([...S.rows.map(r => r['Último equipo asignado']), ...S.events.map(e => e.equipo)])); return l.length ? l : ['Cuadrilla 1', 'Cuadrilla 2']; };
+const equipoDL = () => `<datalist id="dl-equipo">${equipoList().map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+
+/* ───────── eventos del flujo ───────── */
+function applyEvent(r, ev, data, group) {
+  const prev = {}; MUT.forEach(k => { prev[k] = r[k]; });
+  const from = r['Estado detallado'], now = new Date(); let to = from, name = EV[ev].name, equipo = r['Último equipo asignado'];
+  if (ev === 'asignar') { to = 'Asignado'; r['Tipo última intervención'] = 'En proceso'; r['Último equipo asignado'] = data.equipo; equipo = data.equipo; }
+  else if (ev === 'resultado') { const o = OUTCOMES[data.outcome]; to = o.to; r['Tipo última intervención'] = o.tui; name = o.ev; }
+  else if (ev === 'reparado') r['Tipo última intervención'] = 'Reparado';
+  else if (ev === 'reposicion') r['Tipo última intervención'] = 'Reposición';
+  r['Estado detallado'] = to; r['Estado'] = to === 'Cerrado' ? 'Cerrado' : 'En curso';
+  const prevMod = !!r._mod; r._mod = true; r._hay = null;
+  const log = {ts: now, id: r['Id'], numero: r['Número'], evento: name, de: from, a: to, equipo: equipo ?? '', rol: S.role, obs: data.obs || ''};
+  S.events.push(log); group.push({uid: r._uid, prev, prevMod, log});
+}
+function commit(group) { S.undo.push({items: group}); S.rev++; }
+function undoLast() {
+  const g = S.undo.pop(); if (!g) return;
+  g.items.forEach(it => {
+    if (it.created) { S.rows = S.rows.filter(r => r._uid !== it.uid); S.byUid.delete(it.uid); S.sel.delete(it.uid); if (S.open === it.uid) S.open = null; }
+    else { const r = S.byUid.get(it.uid); if (r) { Object.assign(r, it.prev); r._mod = it.prevMod; r._hay = null; } }
+    const i = S.events.indexOf(it.log); if (i > -1) S.events.splice(i, 1);
+  });
+  S.rev--; if (S.rev < 0) S.rev = 0;
+  populateFilters(); renderAll();
+}
+function flowHTML(from, toList) {
+  return `<div class="flow">${pill(from)}<span class="arr" aria-hidden="true">→</span>${toList.map(pill).join(' ')}</div>`;
+}
+function openEvent(ev) {
+  const r = S.byUid.get(S.open); if (!r) return;
+  const e = EV[ev], st = r['Estado detallado'];
+  const head = `<h2>${esc(e.btn.replace('Nuevo evento · ', ''))}</h2><p>Reclamo #${esc(r['Número'])} · ${esc(addr(r))}</p>`;
+  let body = '', btn = '';
+  if (ev === 'asignar') {
+    body = `${flowHTML(st, ['Asignado'])}<div class="field"><label for="e-equipo">Equipo</label><input id="e-equipo" list="dl-equipo" autocomplete="off" value="${esc(r['Último equipo asignado'] || '')}" required><small>Elegí uno existente o escribí un equipo nuevo.</small></div>${equipoDL()}
+      <div class="field"><label for="e-obs">Observaciones (opcional)</label><textarea id="e-obs"></textarea></div>`;
+    btn = `<button class="btn btn-navy" type="submit">Asignar</button>`;
+  } else if (ev === 'resultado') {
+    body = `${flowHTML(st, EV.resultado.to)}<div role="radiogroup" aria-label="Resultado de la salida" style="display:flex;flex-direction:column;gap:8px">` +
+      Object.entries(OUTCOMES).map(([k, o], i) => `<label class="opt"><input type="radio" name="out" value="${k}" ${i === 0 ? 'checked' : ''}><div><b>${esc(o.label)}</b><span>Pasa a ${esc(o.to.toUpperCase())}. ${esc(o.hint)}</span></div></label>`).join('') +
+      `</div><div class="field"><label for="e-obs" id="e-obs-lbl">Observaciones del técnico (opcional)</label><textarea id="e-obs"></textarea></div>`;
+    btn = `<button class="btn btn-navy" type="submit">Registrar resultado</button>`;
+  } else {
+    body = `<div class="flow">${pill(st)}<span class="arr" aria-hidden="true">→</span>${pillEv(ev === 'reparado' ? 'REPARADO' : 'REPOSICION')}</div><p>${esc(e.note)}</p><div class="field"><label for="e-obs">Observaciones (opcional)</label><textarea id="e-obs"></textarea></div>`;
+    btn = `<button class="btn btn-orange" type="submit">Registrar ${ev === 'reparado' ? 'REPARADO' : 'REPOSICION'}</button>`;
+  }
+  openDlg(`<form class="dlg" id="ev-form" novalidate>${head}${body}<div class="errmsg" id="ev-err" role="alert" hidden></div><div class="dlg-actions"><button class="btn" type="button" id="ev-cancel">Cancelar</button>${btn}</div></form>`, d => {
+    $('#ev-cancel', d).onclick = () => dlg.close();
+    const eq = $('#e-equipo', d); if (eq) setTimeout(() => eq.focus(), 0);
+    $$('input[name=out]', d).forEach(i => i.onchange = () => { $('#e-obs-lbl', d).textContent = i.value === 'cerrar' ? 'Observaciones (opcional)' : 'Observaciones del técnico (opcional)'; });
+    $('#ev-form', d).onsubmit = ev2 => {
+      ev2.preventDefault();
+      const data = {obs: ($('#e-obs', d).value || '').trim()};
+      if (ev === 'asignar') { data.equipo = $('#e-equipo', d).value.trim(); if (!data.equipo) { const m = $('#ev-err', d); m.textContent = 'Indicá el equipo al que se asigna el reclamo.'; m.hidden = false; $('#e-equipo', d).focus(); return; } }
+      if (ev === 'resultado') data.outcome = $('input[name=out]:checked', d).value;
+      const g = []; applyEvent(r, ev, data, g); commit(g);
+      dlg.close(); populateFilters(); renderAll();
+      toast(`Reclamo #${r['Número']}: ${r['Estado detallado'].toUpperCase()}`, true);
+    };
+  });
+}
+function openBulkAssign() {
+  const rows = [...S.sel].map(u => S.byUid.get(u)).filter(Boolean), elig = rows.filter(r => nextEvents(r).includes('asignar'));
+  if (!elig.length) return;
+  openDlg(`<form class="dlg" id="bk-form" novalidate><h2>Nuevo evento · Asignar equipo</h2><p>Se asignan ${elig.length} de ${rows.length} reclamos seleccionados.${rows.length > elig.length ? ` Los otros ${rows.length - elig.length} no están en un estado que permita asignar y se dejan como están.` : ''}</p>
+    <div class="field"><label for="b-equipo">Equipo</label><input id="b-equipo" list="dl-equipo" autocomplete="off" required></div>${equipoDL()}
+    <div class="errmsg" id="bk-err" role="alert" hidden></div><div class="dlg-actions"><button class="btn" type="button" id="bk-cancel">Cancelar</button><button class="btn btn-navy" type="submit">Asignar ${elig.length}</button></div></form>`, d => {
+    $('#bk-cancel', d).onclick = () => dlg.close(); setTimeout(() => $('#b-equipo', d).focus(), 0);
+    $('#bk-form', d).onsubmit = e => {
+      e.preventDefault(); const equipo = $('#b-equipo', d).value.trim();
+      if (!equipo) { const m = $('#bk-err', d); m.textContent = 'Indicá el equipo.'; m.hidden = false; return; }
+      const g = []; elig.forEach(r => applyEvent(r, 'asignar', {equipo, obs: ''}, g)); commit(g);
+      S.sel = new Set(); dlg.close(); populateFilters(); renderAll(); toast(`${elig.length} reclamo(s) asignados a ${equipo}`, true);
+    };
+  });
+}
+
+/* ───────── ingresar reclamo ───────── */
+const mode = col => { const m = new Map(); S.rows.forEach(r => { const v = r[col]; if (v !== null && v !== undefined && v !== '') m.set(v, (m.get(v) || 0) + 1); }); let b = null, n = 0; m.forEach((c, v) => { if (c > n) { b = v; n = c; } }); return b; };
+function findDupes(calle, altura, subtipo) {
+  const c = norm(calle); if (!c || !altura) return [];
+  return S.rows.filter(r => r['Estado detallado'] !== 'Cerrado' && norm(r['Calle']) === c && String(r['Altura']) === String(altura) && r['Subtipo'] === subtipo);
+}
+function openNewClaim() {
+  const sub = sortEs(uniq([...DEF_SUBTIPOS, ...S.rows.map(r => r['Subtipo'])])), ori = sortEs(uniq([...DEF_ORIGENES, ...S.rows.map(r => r['Origen'])]));
+  const aor = sortEs(uniq(S.rows.map(r => r['Área origen']))), dis = sortEs(uniq(S.rows.map(r => r['Distrito'])));
+  const dl = (id, col) => `<datalist id="${id}">${sortEs(uniq(S.rows.map(r => r[col]))).map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+  const opts = a => a.map(v => `<option>${esc(v)}</option>`).join('');
+  openDlg(`<form class="dlg" id="nw-form" novalidate><h2>Ingresar Reclamo</h2><p>El reclamo ingresa con el estado ${pill('En curso')}. El número, la fecha y la hora los asigna el sistema.</p>
+    <div class="grid">
+      <div class="field"><label for="n-subtipo">Subtipo *</label><select id="n-subtipo">${opts(sub)}</select></div>
+      <div class="field"><label for="n-origen">Origen *</label><select id="n-origen">${opts(ori)}</select></div>
+      <div class="field"><label for="n-calle">Calle *</label><input id="n-calle" list="dl-calle" autocomplete="off"></div>
+      <div class="field"><label for="n-altura">Altura *</label><input id="n-altura" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label for="n-letra">Letra</label><input id="n-letra" maxlength="2"></div>
+      <div class="field"><label class="lab" for="n-bis">Bis</label><label class="chk" style="padding-left:0"><input type="checkbox" id="n-bis">Es bis</label></div>
+      <div class="field full"><label for="n-inter">Intersección</label><input id="n-inter" autocomplete="off"></div>
+      <div class="field"><label for="n-distrito">Distrito</label><select id="n-distrito"><option value=""></option>${opts(dis)}</select></div>
+      <div class="field"><label for="n-barrio">Barrio</label><input id="n-barrio" list="dl-barrio" autocomplete="off"></div>
+      <div class="field"><label for="n-vecinal">Vecinal</label><input id="n-vecinal" list="dl-vecinal" autocomplete="off"></div>
+      <div class="field"><label for="n-aorigen">Área origen</label><select id="n-aorigen"><option value=""></option>${opts(aor)}</select></div>
+      <div class="field"><label for="n-solic">Solicitantes</label><input id="n-solic" type="number" min="1" value="1"></div>
+      <div class="field full"><label for="n-desc">Descripción *</label><textarea id="n-desc"></textarea></div>
+    </div>${dl('dl-calle', 'Calle')}${dl('dl-barrio', 'Ident. Barrio')}${dl('dl-vecinal', 'Vecinal')}
+    <div id="n-dup"></div><div class="errmsg" id="n-err" role="alert" hidden></div>
+    <div class="dlg-actions"><button class="btn" type="button" id="n-cancel">Cancelar</button><button class="btn btn-red" type="submit">Ingresar Reclamo</button></div></form>`, d => {
+    $('#n-cancel', d).onclick = () => dlg.close(); setTimeout(() => $('#n-subtipo', d).focus(), 0);
+    const checkDup = () => {
+      const list = findDupes($('#n-calle', d).value, $('#n-altura', d).value, $('#n-subtipo', d).value);
+      $('#n-dup', d).innerHTML = list.length ? `<div class="dup" role="status"><strong>Ya hay un reclamo abierto con el mismo subtipo en esa dirección.</strong><ul>${list.map(r => `<li>#${esc(r['Número'])} · ${esc(r['Estado detallado']).toUpperCase()} · ${ageText(r['Fecha hora registro'])} <button class="btn btn-sm" type="button" data-reit="${r._uid}">Sumar reiteración</button></li>`).join('')}</ul><p>Si es el mismo problema, sumá una reiteración. Si es otro, ingresalo como reclamo nuevo.</p></div>` : '';
+    };
+    ['n-calle', 'n-altura', 'n-subtipo'].forEach(id => $('#' + id, d).addEventListener('input', checkDup));
+    $('#n-calle', d).addEventListener('change', () => {
+      const m = [...S.rows].reverse().find(r => norm(r['Calle']) === norm($('#n-calle', d).value));
+      if (!m) return;
+      if (!$('#n-distrito', d).value && m['Distrito']) $('#n-distrito', d).value = m['Distrito'];
+      if (!$('#n-barrio', d).value && m['Ident. Barrio']) $('#n-barrio', d).value = m['Ident. Barrio'];
+      if (!$('#n-vecinal', d).value && m['Vecinal']) $('#n-vecinal', d).value = m['Vecinal'];
+    });
+    $('#n-dup', d).addEventListener('click', e => {
+      const b = e.target.closest('[data-reit]'); if (!b) return;
+      const r = S.byUid.get(+b.dataset.reit), solic = Math.max(1, +$('#n-solic', d).value || 1);
+      const prev = {}; MUT.forEach(k => { prev[k] = r[k]; }); const prevMod = !!r._mod;
+      r['Reiteraciones'] = (Number(r['Reiteraciones']) || 0) + 1; r['Solicitantes'] = (Number(r['Solicitantes']) || 1) + solic; r._mod = true; r._hay = null;
+      const log = {ts: new Date(), id: r['Id'], numero: r['Número'], evento: 'Reiteración', de: r['Estado detallado'], a: r['Estado detallado'], equipo: r['Último equipo asignado'] ?? '', rol: S.role, obs: ($('#n-desc', d).value || '').trim()};
+      S.events.push(log); commit([{uid: r._uid, prev, prevMod, log}]);
+      dlg.close(); renderAll(); openDrawer(r._uid); toast(`Reiteración sumada al reclamo #${r['Número']}`, true);
+    });
+    $('#nw-form', d).onsubmit = e => {
+      e.preventDefault();
+      const v = id => ($('#' + id, d).value || '').trim(), err = $('#n-err', d);
+      const miss = [['n-calle', 'la calle'], ['n-altura', 'la altura'], ['n-desc', 'la descripción']].find(([id]) => !v(id));
+      if (miss) { err.textContent = `Completá ${miss[1]} del reclamo.`; err.hidden = false; $('#' + miss[0], d).focus(); return; }
+      const now = new Date(), nid = Math.max(0, ...S.rows.map(r => Number(r['Id']) || 0)) + 1, nnum = Math.max(0, ...S.rows.map(r => Number(r['Número']) || 0)) + 1;
+      const r = {}; S.outCols.forEach(c => { r[c.key] = null; });
+      const area = mode('Área derivación');
+      Object.assign(r, {
+        'Id': nid, 'Número': nnum, 'Año': now.getFullYear(), 'Tipo': mode('Tipo') || 'Reclamo', 'Subtipo': v('n-subtipo'), 'Categoría': mode('Categoría') || 'Alumbrado',
+        'Fecha hora registro': now, 'Área origen': v('n-aorigen') || null, 'Área derivación': area, 'Estado': 'En curso', 'Estado detallado': 'En curso', 'Origen': v('n-origen'),
+        'Distrito': v('n-distrito') || null, 'Vecinal': v('n-vecinal') || null, 'Ident. Barrio': v('n-barrio') || null, 'Reiteraciones': 0, 'Solicitantes': Math.max(1, +v('n-solic') || 1),
+        'Fecha últ. derivación': now, 'Área última derivación': area, 'Calle': v('n-calle').toUpperCase(), 'Intersección': v('n-inter') || null, 'Altura': Number(v('n-altura')),
+        'Bis': $('#n-bis', d).checked ? 'S' : 'N', 'Letra': v('n-letra').toUpperCase() || null, 'Descripción': v('n-desc')
+      });
+      r._uid = S.nextUid++; r._mod = true; r._new = true; r._x = r._y = null;
+      S.rows.push(r); S.byUid.set(r._uid, r);
+      const log = {ts: now, id: nid, numero: nnum, evento: 'Ingreso de reclamo', de: '', a: 'En curso', equipo: '', rol: S.role, obs: ''};
+      S.events.push(log); commit([{uid: r._uid, created: true, log}]);
+      S.f = {q: '', estado: '', subtipo: '', distrito: '', origen: '', equipo: '', reit: false}; $('#q').value = ''; $('#f-reit').checked = false; S.sort = 'reg-desc'; $('#sort').value = 'reg-desc'; S.page = 1;
+      dlg.close(); populateFilters(); renderAll(); openDrawer(r._uid); toast(`Reclamo #${nnum} ingresado en estado EN CURSO`, true);
+    };
+  });
+}
+
+/* ───────── exportación ───────── */
+async function saveFile(filename, data, markSaved) {
+  let dl = null;
+  try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+  if (!dl) { toast('Este visor no permite descargas. Abrí la página en el navegador.'); return; }
+  try {
+    await dl.save({filename, data});
+    if (markSaved) { S.savedRev = S.rev; renderStatus(); }
+    toast(`Archivo guardado: ${filename}`);
+  } catch (e) {
+    if (e && e.code === 'declined') return;
+    toast(`No se pudo guardar el archivo (${(e && e.code) || 'error'}).`);
+  }
+}
+const csvCell = v => { const s = isDate(v) ? fmtISO(v) : (v === null || v === undefined ? '' : String(v)); return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function exportData(kind) {
+  const base = `${stamp()}_solicitudes`;
+  if (kind === 'tpl') return saveFile('plantilla_solicitudes.csv', '﻿' + COLS.join(';') + '\r\n', false);
+  if (!S.rows.length) return toast('No hay reclamos para exportar.');
+  if (kind === 'csv') {
+    const lines = [S.outCols.map(c => csvCell(c.header)).join(';')];
+    S.rows.forEach(r => lines.push(S.outCols.map(c => csvCell(r[c.key])).join(';')));
+    return saveFile(base + '.csv', '﻿' + lines.join('\r\n') + '\r\n', true);
+  }
+  if (!window.XLSX) return toast('No se pudo cargar el generador de Excel. Probá exportar en .csv.');
+  /* Las fechas se escriben como número de serie de Excel (hora local sin zona) con formato de fecha. */
+  const serial = d => (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()) - Date.UTC(1899, 11, 30)) / 864e5;
+  const cell = v => isDate(v) ? serial(v) : (v === undefined ? null : v);
+  const fmtDates = (ws, cols) => Object.keys(ws).forEach(k => { if (k[0] !== '!' && ws[k].t === 'n' && cols.has(XLSX.utils.decode_cell(k).c) && XLSX.utils.decode_cell(k).r > 0) ws[k].z = 'yyyy-mm-dd hh:mm:ss'; });
+  const aoa = [S.outCols.map(c => c.header)];
+  S.rows.forEach(r => aoa.push(S.outCols.map(c => cell(r[c.key]))));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  fmtDates(ws, new Set(S.outCols.map((c, i) => DATE_F.includes(c.key) ? i : -1).filter(i => i >= 0)));
+  ws['!cols'] = S.outCols.map(c => ({wch: Math.min(40, Math.max(10, c.header.length + 2))}));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, base.slice(0, 31));
+  const ea = [EV_HEAD]; S.events.forEach(e => ea.push([cell(e.ts), e.id, e.numero, e.evento, e.de, e.a, e.equipo, e.rol, e.obs]));
+  const we = XLSX.utils.aoa_to_sheet(ea);
+  fmtDates(we, new Set([0]));
+  we['!cols'] = [{wch: 20}, {wch: 12}, {wch: 10}, {wch: 22}, {wch: 14}, {wch: 14}, {wch: 18}, {wch: 12}, {wch: 50}];
+  XLSX.utils.book_append_sheet(wb, we, 'Eventos');
+  saveFile(base + '.xlsx', XLSX.write(wb, {bookType: 'xlsx', type: 'array'}), true);
+}
+
+/* ───────── render general y eventos de la interfaz ───────── */
+function renderView() {
+  ['lista', 'mapa', 'eventos'].forEach(v => { $('#view-' + v).hidden = S.view !== v; });
+  $$('#views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === S.view)));
+  if (S.view === 'lista') renderList(); else if (S.view === 'mapa') renderMap(); else renderEvents();
+}
+function renderAll() {
+  renderStatus(); renderSummary(); renderView(); renderBulk(); if (S.open) { if (S.byUid.has(S.open)) renderDrawer(); else { S.open = null; renderDrawer(); } }
+}
+function refilter() { S.page = 1; MAP.fit = true; renderSummary(); renderView(); renderBulk(); }
+
+let qT;
+$('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.f.q = e.target.value; refilter(); }, 150); });
+[['#f-subtipo', 'subtipo'], ['#f-distrito', 'distrito'], ['#f-origen', 'origen'], ['#f-equipo', 'equipo']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.f[k] = e.target.value; refilter(); }));
+$('#f-reit').addEventListener('change', e => { S.f.reit = e.target.checked; refilter(); });
+$('#sort').addEventListener('change', e => { S.sort = e.target.value; S.page = 1; renderView(); });
+function setRole(role, fromDrawer) {
+  S.role = role;
+  $$('#roles input').forEach(i => { i.checked = i.value === role; });
+  renderDrawer(); renderBulk();
+  if (fromDrawer) { const i = $('#dr-roles input:checked'); if (i) i.focus(); }
+}
+$('#roles').addEventListener('change', e => setRole(e.target.value, false));
+$('#drawer').addEventListener('change', e => { if (e.target.name === 'role2') setRole(e.target.value, true); });
+$('#views').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; S.view = b.dataset.view; if (S.view === 'mapa') MAP.fit = true; renderView(); renderBulk(); });
+$('#summary').addEventListener('click', e => { const b = e.target.closest('[data-st]'); if (!b) return; const v = b.dataset.st; S.f.estado = S.f.estado === v ? '' : v; refilter(); });
+$('#btn-new').addEventListener('click', openNewClaim);
+$('#btn-load').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; loadFile(f); });
+$('#menu').addEventListener('click', e => { const b = e.target.closest('[data-exp]'); if (b) { $('#menu').open = false; exportData(b.dataset.exp); } });
+document.addEventListener('click', e => { const m = $('#menu'); if (m.open && !m.contains(e.target)) m.open = false; });
+$('#status').addEventListener('click', e => { if (e.target.closest('#btn-undo')) undoLast(); const x = e.target.closest('[data-exp]'); if (x) exportData(x.dataset.exp); });
+$('#msgs').addEventListener('click', e => { if (e.target.closest('[data-dismiss]')) showMsgs(''); if (e.target.closest('[data-load]')) $('#file').click(); });
+$('#view-lista').addEventListener('click', e => {
+  const o = e.target.closest('[data-open]'); if (o) return openDrawer(+o.dataset.open, o);
+  const p = e.target.closest('[data-pg]'); if (p) { S.page += +p.dataset.pg; renderList(); $('#view-lista').scrollIntoView({block: 'nearest'}); }
+});
+$('#view-lista').addEventListener('change', e => {
+  if (e.target.id === 'sel-all') { const a = filtered(); if (e.target.checked) a.forEach(r => S.sel.add(r._uid)); else a.forEach(r => S.sel.delete(r._uid)); renderList(); renderBulk(); return; }
+  const s = e.target.closest('[data-sel]'); if (s) { const u = +s.dataset.sel; if (s.checked) S.sel.add(u); else S.sel.delete(u); renderList(); renderBulk(); }
+});
+$('#view-eventos').addEventListener('click', e => { const o = e.target.closest('[data-open]'); if (o) openDrawer(+o.dataset.open, o); });
+$('#drawer').addEventListener('click', e => { if (e.target.closest('#dr-close')) closeDrawer(); const b = e.target.closest('[data-ev]'); if (b && !b.disabled) openEvent(b.dataset.ev); });
+$('#scrim').addEventListener('click', closeDrawer);
+$('#bulk').addEventListener('click', e => { if (e.target.closest('#bulk-clear')) { S.sel = new Set(); renderList(); renderBulk(); } if (e.target.closest('#bulk-assign')) openBulkAssign(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.open && !dlg.open) closeDrawer(); });
+bindMap();
+window.addEventListener('resize', () => { if (S.view === 'mapa' && $('#map-svg')) { mapMeasure(); mapApply(); } });
+window.addEventListener('beforeunload', e => { if (dirty() && !S.sample) { e.preventDefault(); e.returnValue = ''; } });
+
+/* arrastrar y soltar un archivo en cualquier parte de la página */
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+window.addEventListener('dragenter', e => { if (hasFiles(e)) { dragDepth++; $('#dropveil').hidden = false; } });
+window.addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('#dropveil').hidden = true; } });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth = 0; $('#dropveil').hidden = true; loadFile(e.dataTransfer.files[0]); });
+
+/* arranque: datos de ejemplo hasta que se cargue una planilla */
+installData(makeSample(), 'Datos de ejemplo', [], true);
+populateFilters(); renderAll();
+window.__sra = {S, loadFile, exportData};
+})();
+</script>
+
+</body></html>
