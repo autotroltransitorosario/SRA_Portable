@@ -3,6 +3,8 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
 <style>
 /* Concepto: consola operativa. Barra superior fija con las acciones del sistema, tablero de estados que filtra,
    lista/mapa/eventos al centro y ficha del reclamo como panel lateral con el próximo evento permitido. */
@@ -124,9 +126,10 @@ main{padding-block:16px 120px;display:flex;flex-direction:column;gap:14px}
 
 /* tabla */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.tbl-wrap{overflow-x:auto}
+.tbl-wrap{overflow:auto}
+#view-lista .tbl-wrap{max-height:max(420px,calc(100vh - 260px))}
 table{border-collapse:collapse;width:100%;min-width:980px}
-th{position:sticky;top:0;text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 12px;white-space:nowrap;font-weight:600}
+th{position:sticky;top:0;z-index:1;text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 12px;white-space:nowrap;font-weight:600}
 td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
 tbody tr:hover{background:color-mix(in srgb,var(--soft) 60%,transparent)}
 tbody tr.is-sel{background:color-mix(in srgb,var(--amber-bg) 45%,transparent)}
@@ -141,7 +144,7 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
 
 /* mapa */
-.map-box{position:relative;height:600px;background:var(--soft);touch-action:none}
+.map-box{position:relative;isolation:isolate;height:600px;background:var(--soft);touch-action:none}
 #map-svg{width:100%;height:100%;display:block;cursor:grab}
 #map-svg:active{cursor:grabbing}
 .dot{stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:pointer}
@@ -155,6 +158,25 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .map-scale{position:absolute;left:12px;bottom:12px;display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--surface) 88%,transparent);padding:6px 10px;border-radius:8px}
 .map-scale i{display:block;height:6px;border:2px solid var(--fg);border-top:0}
 .map-note{position:absolute;left:12px;top:12px;max-width:60%;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--surface) 88%,transparent);padding:6px 10px;border-radius:8px}
+.dot.chosen{stroke:var(--focus);stroke-width:3.5}
+.map-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.map-bar .info{color:var(--muted);font-size:13px}
+.switch{display:inline-flex;align-items:center;gap:10px;min-height:36px;cursor:pointer;font-weight:600;font-size:13.5px;user-select:none}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .trk{position:relative;width:40px;height:22px;border-radius:999px;background:var(--line);transition:background .15s;flex:none}
+.switch .trk::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+.switch input:checked+.trk{background:var(--navy)}
+.switch input:checked+.trk::after{transform:translateX(18px)}
+.switch input:focus-visible+.trk{outline:2px solid var(--focus);outline-offset:2px}
+.switch input:disabled~*{opacity:.5;cursor:not-allowed}
+#lmap{position:absolute;inset:0;background:var(--soft);font:inherit}
+.leaflet-container{font:13px/1.4 var(--font)}
+.leaflet-tooltip{font-size:12.5px}
+.clu{display:flex;align-items:center;justify-content:center;border-radius:50%;background:color-mix(in srgb,var(--navy) 88%,transparent);color:#fff;font:700 13px var(--font);border:3px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.35);position:relative}
+.clu.sel{border-color:#2F6FDE;box-shadow:0 0 0 3px rgba(47,111,222,.45),0 2px 6px rgba(0,0,0,.35)}
+.clu small{position:absolute;top:-8px;right:-10px;background:#2F6FDE;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;line-height:17px;border:2px solid #fff}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:1.5px solid}
 .tip{position:absolute;pointer-events:none;background:var(--navy);color:var(--navy-fg);padding:6px 10px;border-radius:8px;font-size:12.5px;max-width:260px;z-index:5}
 
 /* panel lateral */
@@ -304,6 +326,8 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
 <dialog id="dlg"></dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -347,6 +371,24 @@ function normCoord(v) {
   if (digits.length < 7) return null;
   const n = parseFloat(digits.slice(0, 7) + '.' + digits.slice(7));
   return isFinite(n) ? n : null;
+}
+/* Coord. X / Y están en Gauss-Krüger Argentina (POSGAR). La faja sale del primer dígito de X
+   (faja 5 → meridiano -60°, falso este 5.500.000). Se convierten a latitud/longitud para el mapa base. */
+function gkToLatLng(x, y) {
+  if (x === null || y === null) return null;
+  const zone = Math.floor(x / 1e6); if (zone < 1 || zone > 7) return null;
+  const a = 6378137, f = 1 / 298.257223563, e2 = f * (2 - f), ep2 = e2 / (1 - e2), e4 = e2 * e2, e6 = e4 * e2;
+  const lam0 = (-72 + (zone - 1) * 3) * Math.PI / 180, FE = zone * 1e6 + 5e5;
+  const A = 1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256;
+  const mu = (a * A * (-Math.PI / 2) + y) / (a * A);
+  const s = Math.sqrt(1 - e2), e1 = (1 - s) / (1 + s);
+  const p1 = mu + (3*e1/2 - 27*e1**3/32) * Math.sin(2*mu) + (21*e1**2/16 - 55*e1**4/32) * Math.sin(4*mu) + (151*e1**3/96) * Math.sin(6*mu) + (1097*e1**4/512) * Math.sin(8*mu);
+  const sp = Math.sin(p1), cp = Math.cos(p1), tp = Math.tan(p1);
+  const C = ep2 * cp * cp, T = tp * tp, w = 1 - e2 * sp * sp, N = a / Math.sqrt(w), R = a * (1 - e2) / w ** 1.5, D = (x - FE) / N;
+  const lat = p1 - (N * tp / R) * (D*D/2 - (5 + 3*T + 10*C - 4*C*C - 9*ep2) * D**4/24 + (61 + 90*T + 298*C + 45*T*T - 252*ep2 - 3*C*C) * D**6/720);
+  const lon = lam0 + (D - (1 + 2*T + C) * D**3/6 + (5 - 2*C + 28*T - 3*C*C + 8*ep2 + 24*T*T) * D**5/120) / cp;
+  const la = lat * 180 / Math.PI, lo = lon * 180 / Math.PI;
+  return (la > -56 && la < -20 && lo > -75 && lo < -52) ? [la, lo] : null;
 }
 function parseCSV(text) {
   const first = text.split(/\r?\n/, 1)[0] || '';
@@ -420,9 +462,11 @@ const addr = r => `${r['Calle'] ?? ''} ${r['Altura'] ?? ''}${r['Bis'] === 'S' ? 
 const S = {
   rows: [], byUid: new Map(), nextUid: 1, headers: [], hmap: {}, outCols: [], events: [], undo: [],
   fileName: '', sample: false, rev: 0, savedRev: 0,
-  f: {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false}, sort: 'reg-desc', page: 1, PER: 25,
-  sel: new Set(), open: null, role: 'Operador', view: 'lista', opener: null
+  f: {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false}, sort: 'reg-desc',
+  sel: new Set(), open: null, role: 'Operador', view: 'lista', opener: null,
+  cluster: false, onlySel: false
 };
+try { S.cluster = localStorage.getItem('sra-cluster') === '1'; } catch (e) {}
 const dirty = () => S.rev !== S.savedRev;
 
 /* ───────── carga de la planilla ───────── */
@@ -457,6 +501,7 @@ function buildRows(matrix) {
     const mx = xs[xs.length >> 1], my = ys[ys.length >> 1];
     rows.forEach(r => { if (r._x === null || r._y === null || Math.abs(r._x - mx) > 100000 || Math.abs(r._y - my) > 100000) { r._x = r._y = null; } });
   }
+  rows.forEach(r => { const ll = gkToLatLng(r._x, r._y); r._ll = ll; });
   warn.noCoord = rows.filter(r => r._x === null).length;
   return {headers, hmap, rows, warn};
 }
@@ -478,7 +523,7 @@ function installData(built, name, events, isSample) {
   built.headers.forEach(h => { if (h) { cols.push({header: h, key: built.hmap[h]}); used.add(built.hmap[h]); } });
   NEEDED_OUT.forEach(k => { if (!used.has(k)) cols.push({header: k, key: k}); });
   S.outCols = cols;
-  S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.page = 1;
+  S.events = events || []; S.undo = []; S.rev = 0; S.savedRev = 0; S.sel = new Set(); S.open = null; S.onlySel = false;
   S.f = {q:'', estado:'', subtipo:'', distrito:'', vecinal:'', calle:'', origen:'', equipo:'', reit:false};
   $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false;
   MAP.fit = true;
@@ -641,18 +686,27 @@ function rowHTML(r) {
     <td>${esc(r['Tipo última intervención'] || '—')}</td>
     <td>${esc(r['Último equipo asignado'] || '—')}</td></tr>`;
 }
+function listFooter(a) {
+  const nSel = a.filter(r => S.sel.has(r._uid)).length;
+  return `<span>${a.length ? `${fmtNum(a.length)} reclamo(s) en la lista` : '0 reclamos'}${S.sel.size ? ` · ${fmtNum(S.sel.size)} seleccionado(s)${nSel !== S.sel.size ? ` (${fmtNum(nSel)} con estos filtros)` : ''}` : ''}</span>
+    <span>${a.length && nSel < a.length ? `<button class="btn btn-sm" type="button" data-selall>Seleccionar los ${fmtNum(a.length)}</button>` : ''} ${S.sel.size ? `<button class="btn btn-sm" type="button" data-selnone>Quitar selección</button>` : ''}</span>`;
+}
+function syncSelUI() {
+  const a = filtered(), allSel = a.length && a.every(r => S.sel.has(r._uid)), someSel = a.some(r => S.sel.has(r._uid));
+  const cb = $('#sel-all'); if (cb) { cb.checked = !!allSel; cb.indeterminate = !allSel && someSel; }
+  const p = $('#view-lista .pager'); if (p) p.innerHTML = listFooter(a);
+  renderBulk();
+  if (S.view === 'mapa') renderMap();
+}
 function renderList() {
-  const a = filtered(), pages = Math.max(1, Math.ceil(a.length / S.PER));
-  S.page = Math.min(S.page, pages);
-  const slice = a.slice((S.page - 1) * S.PER, S.page * S.PER);
+  const a = filtered();
   const allSel = a.length && a.every(r => S.sel.has(r._uid)), someSel = a.some(r => S.sel.has(r._uid));
-  const body = slice.length ? slice.map(rowHTML).join('') : `<tr><td colspan="9"><div class="empty">Ningún reclamo coincide con los filtros.</div></td></tr>`;
+  const body = a.length ? a.map(rowHTML).join('') : `<tr><td colspan="9"><div class="empty">Ningún reclamo coincide con los filtros.</div></td></tr>`;
   $('#view-lista').innerHTML = `<div class="tbl-wrap"><table><thead><tr>
     <th class="c-chk"><input type="checkbox" id="sel-all" aria-label="Seleccionar todos los reclamos filtrados" ${allSel ? 'checked' : ''}></th>
     <th>Número</th><th>Estado</th><th>Subtipo</th><th>Dirección</th><th>Registro</th><th>Reit.</th><th>Última intervención</th><th>Equipo</th></tr></thead>
     <tbody>${body}</tbody></table></div>
-    <div class="pager"><span>${a.length ? `Mostrando ${(S.page-1)*S.PER+1}–${Math.min(S.page*S.PER, a.length)} de ${fmtNum(a.length)}` : '0 reclamos'}</span>
-    <span><button class="btn btn-sm" type="button" data-pg="-1" ${S.page <= 1 ? 'disabled' : ''}>Anterior</button> <span>Página ${S.page} de ${pages}</span> <button class="btn btn-sm" type="button" data-pg="1" ${S.page >= pages ? 'disabled' : ''}>Siguiente</button></span></div>`;
+    <div class="pager">${listFooter(a)}</div>`;
   const cb = $('#sel-all'); if (cb) cb.indeterminate = !allSel && someSel;
 }
 function renderEvents() {
@@ -664,9 +718,110 @@ function renderEvents() {
 
 /* ───────── mapa ───────── */
 const MAP = {cx: 0, cy: 0, mpp: 1, W: 1, H: 1, fit: true, pts: [], drag: null};
+const LM = {map: null, layer: null, tiles: null, tileOk: false, tileErr: 0};
+const hasLeaflet = () => !!window.L && typeof L.map === 'function';
+const hasCluster = () => hasLeaflet() && typeof L.markerClusterGroup === 'function';
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
 function renderMap() {
   const host = $('#view-mapa');
-  const pts = filtered().filter(r => r._x !== null);
+  if (!$('#map-bar', host)) host.innerHTML = `<div class="map-bar" id="map-bar"></div><div id="map-body"></div>`;
+  const all = filtered();
+  const base = S.onlySel ? all.filter(r => S.sel.has(r._uid)) : all;
+  const leaflet = hasLeaflet();
+  const withCoord = base.filter(r => leaflet ? r._ll : r._x !== null);
+  // los seleccionados y el abierto se dibujan al final para que queden arriba
+  const rank = r => (r._uid === S.open ? 2 : S.sel.has(r._uid) ? 1 : 0);
+  const pts = withCoord.slice().sort((a, b) => rank(a) - rank(b));
+  renderMapBar(base.length, pts.length, leaflet);
+  if (leaflet) leafletRender(pts); else renderSvgMap(pts);
+}
+function renderMapBar(nBase, nPts, leaflet) {
+  const act = document.activeElement && document.activeElement.id;
+  const nSelMap = MAP.lastSel = S.sel.size;
+  const legend = STATES.map(s => { const t = TONE[s]; return `<span><i style="background:${cssVar('--' + t + '-fg')};border-color:#fff"></i>${esc(s)}</span>`; }).join('') + `<span><i style="background:transparent;border:2.5px solid #2F6FDE"></i>Seleccionado</span>`;
+  $('#map-bar').innerHTML = `
+    <label class="switch" title="${hasCluster() ? 'Agrupa los reclamos cercanos en un círculo con la cantidad' : 'No se pudo cargar el agrupador'}"><input type="checkbox" role="switch" id="sw-cluster" ${S.cluster && hasCluster() ? 'checked' : ''} ${hasCluster() ? '' : 'disabled'}><span class="trk" aria-hidden="true"></span><span>Agrupar reclamos</span></label>
+    <label class="switch"><input type="checkbox" role="switch" id="sw-onlysel" ${S.onlySel ? 'checked' : ''} ${nSelMap || S.onlySel ? '' : 'disabled'}><span class="trk" aria-hidden="true"></span><span>Solo seleccionados${nSelMap ? ` (${fmtNum(nSelMap)})` : ''}</span></label>
+    ${leaflet ? `<button class="btn btn-sm" type="button" id="map-selvis" ${nPts ? '' : 'disabled'}>Seleccionar los visibles en el mapa</button>` : ''}
+    <button class="btn btn-sm" type="button" id="map-fit" ${nPts ? '' : 'disabled'}>Ver todo</button>
+    <span class="info">${fmtNum(nPts)} en el mapa${nBase > nPts ? ` · ${fmtNum(nBase - nPts)} sin coordenadas` : ''}${leaflet ? ' · Shift+clic en un punto para seleccionarlo' : ''}</span>
+    <span class="legend">${legend}</span>`;
+  if (act && $('#' + act)) $('#' + act).focus();
+}
+function dotStyle(r) {
+  const t = TONE[r['Estado detallado']] || 'gray', sel = S.sel.has(r._uid), open = r._uid === S.open;
+  return {radius: open ? 10 : sel ? 8.5 : 7, weight: open || sel ? 3.5 : 1.5, opacity: 1, fillOpacity: .95,
+    color: open ? cssVar('--fg') : sel ? '#2F6FDE' : '#FFFFFF', fillColor: cssVar('--' + t + '-fg')};
+}
+function cluIcon(c) {
+  const ch = c.getAllChildMarkers(), n = ch.length, ns = ch.filter(m => S.sel.has(m._uid)).length;
+  const sz = n < 10 ? 34 : n < 100 ? 42 : 52;
+  return L.divIcon({html: `<div class="clu${ns ? ' sel' : ''}" style="width:${sz}px;height:${sz}px">${n}${ns ? `<small title="Seleccionados">${ns}</small>` : ''}</div>`, className: 'clu-wrap', iconSize: [sz, sz]});
+}
+function leafletRender(pts) {
+  const body = $('#map-body');
+  if (!LM.map || !$('#lmap')) {
+    body.innerHTML = `<div class="map-box"><div id="lmap" role="application" aria-label="Mapa de los reclamos filtrados. La lista ofrece el mismo contenido accesible por teclado."></div><div class="map-note" id="tile-note" style="z-index:500;left:56px" hidden>No se pudo cargar el mapa base de OpenStreetMap. Los puntos se ubican igual según sus coordenadas.</div></div>`;
+    LM.map = L.map('lmap', {zoomControl: true}).setView([-32.95, -60.66], 12);
+    LM.tileOk = false; LM.tileErr = 0;
+    LM.tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}).addTo(LM.map);
+    LM.tiles.on('tileload', () => { LM.tileOk = true; const n = $('#tile-note'); if (n) n.hidden = true; });
+    LM.tiles.on('tileerror', () => { if (!LM.tileOk && ++LM.tileErr >= 4) { const n = $('#tile-note'); if (n) n.hidden = false; } });
+    if (window.ResizeObserver) new ResizeObserver(() => LM.map && LM.map.invalidateSize()).observe($('#lmap'));
+  }
+  LM.map.invalidateSize();
+  if (LM.layer) LM.map.removeLayer(LM.layer);
+  const useCl = S.cluster && hasCluster();
+  LM.layer = useCl ? L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 55, spiderfyOnMaxZoom: true, chunkedLoading: true, iconCreateFunction: cluIcon}) : L.featureGroup();
+  const ms = pts.map(r => {
+    const m = L.circleMarker(r._ll, dotStyle(r)); m._uid = r._uid;
+    m.bindTooltip(`<strong>#${esc(r['Número'])}</strong> · ${esc(r['Estado detallado'])}${S.sel.has(r._uid) ? ' · seleccionado' : ''}<br>${esc(addr(r))}`, {direction: 'top', offset: [0, -6]});
+    m.on('click', e => {
+      const oe = e.originalEvent || {};
+      if (oe.shiftKey || oe.ctrlKey || oe.metaKey) { if (S.sel.has(r._uid)) S.sel.delete(r._uid); else S.sel.add(r._uid); afterSel(); }
+      else openDrawer(r._uid, $('#lmap'));
+    });
+    return m;
+  });
+  if (useCl) LM.layer.addLayers(ms); else ms.forEach(m => LM.layer.addLayer(m));
+  LM.layer.addTo(LM.map);
+  if (MAP.fit && ms.length) mapFitAll();
+  MAP.fit = false;
+}
+function mapFitAll() {
+  if (hasLeaflet() && LM.map && LM.layer) {
+    const lls = LM.layer.getLayers().map(m => m.getLatLng());
+    if (lls.length) LM.map.fitBounds(L.latLngBounds(lls), {paddingTopLeft: [30, 40], paddingBottomRight: [30, S.sel.size ? 100 : 30], maxZoom: 17});
+  } else if ($('#map-svg')) { MAP.moved = false; mapMeasure(); mapFit(); mapApply(); }
+}
+function selectVisible() {
+  if (!LM.map) return;
+  const b = LM.map.getBounds(); let n = 0;
+  LM.layer.getLayers().forEach(m => { if (b.contains(m.getLatLng()) && !S.sel.has(m._uid)) { S.sel.add(m._uid); n++; } });
+  afterSel();
+  toast(n ? `${n} reclamo(s) agregados a la selección` : 'Los reclamos visibles ya estaban seleccionados');
+}
+function afterSel() {
+  if (S.onlySel && !S.sel.size) S.onlySel = false;
+  if (S.view === 'lista') renderList(); else if (S.view === 'mapa') renderMap();
+  renderBulk(); if (S.open) renderDrawer();
+}
+function bindMapBar() {
+  const host = $('#view-mapa');
+  host.addEventListener('change', e => {
+    if (e.target.id === 'sw-cluster') { S.cluster = e.target.checked; try { localStorage.setItem('sra-cluster', S.cluster ? '1' : '0'); } catch (x) {} renderMap(); }
+    if (e.target.id === 'sw-onlysel') { S.onlySel = e.target.checked; MAP.fit = true; renderMap(); renderBulk(); }
+  });
+  host.addEventListener('click', e => {
+    if (e.target.closest('#map-selvis')) selectVisible();
+    if (e.target.closest('#map-fit')) mapFitAll();
+  });
+}
+
+/* Vista sin mapa base: se usa solo si no se pudo cargar Leaflet */
+function renderSvgMap(pts) {
+  const host = $('#map-body');
   MAP.pts = pts;
   if (!pts.length) { host.innerHTML = `<div class="empty">Ningún reclamo filtrado tiene coordenadas para mostrar.</div>`; return; }
   host.innerHTML = `<div class="map-box" id="map-box"><svg id="map-svg" role="img" aria-label="Ubicación de los reclamos filtrados. La lista ofrece el mismo contenido accesible por teclado."></svg>
@@ -674,7 +829,7 @@ function renderMap() {
     <div class="map-tools"><button class="btn" type="button" data-zoom="1" aria-label="Acercar">+</button><button class="btn" type="button" data-zoom="-1" aria-label="Alejar">−</button><button class="btn" type="button" data-zoom="0" aria-label="Ver todo" title="Ver todo">⤢</button></div>
     <div class="map-scale"><span id="scale-lbl"></span><i id="scale-bar"></i></div><div class="tip" id="tip" hidden></div></div>`;
   const svg = $('#map-svg');
-  svg.innerHTML = pts.map(r => `<circle class="dot${r._uid === S.open ? ' sel' : ''}" data-uid="${r._uid}" data-tone="${TONE[r['Estado detallado']] || 'gray'}" cx="${r._x}" cy="${-r._y}" r="6"/>`).join('');
+  svg.innerHTML = pts.map(r => `<circle class="dot${r._uid === S.open ? ' sel' : ''}${S.sel.has(r._uid) ? ' chosen' : ''}" data-uid="${r._uid}" data-tone="${TONE[r['Estado detallado']] || 'gray'}" cx="${r._x}" cy="${-r._y}" r="6"/>`).join('');
   mapMeasure();
   if (MAP.fit) { mapFit(); MAP.moved = false; }
   mapApply();
@@ -736,7 +891,7 @@ function bindMap() {
   host.addEventListener('click', e => {
     const z = e.target.closest('[data-zoom]'); if (!z) return;
     const v = +z.dataset.zoom;
-    if (v === 0) { MAP.moved = false; mapMeasure(); mapFit(); mapApply(); } else mapZoom(v > 0 ? 0.6 : 1.6, MAP.W / 2, MAP.H / 2);
+    if (v === 0) mapFitAll(); else mapZoom(v > 0 ? 0.6 : 1.6, MAP.W / 2, MAP.H / 2);
   });
 }
 
@@ -750,13 +905,12 @@ function histFor(r) {
 }
 function openDrawer(uid, opener) {
   S.open = uid; S.opener = opener || document.activeElement;
-  renderDrawer(true); renderList(); if (S.view === 'mapa') mapMarkSel();
+  renderDrawer(true); if (S.view === 'lista') renderList(); else if (S.view === 'mapa') renderMap();
 }
 function closeDrawer() {
-  S.open = null; renderDrawer(); renderList(); if (S.view === 'mapa') mapMarkSel();
+  S.open = null; renderDrawer(); if (S.view === 'lista') renderList(); else if (S.view === 'mapa') renderMap();
   if (S.opener && S.opener.isConnected) S.opener.focus();
 }
-function mapMarkSel() { $$('#map-svg circle').forEach(c => c.classList.toggle('sel', +c.dataset.uid === S.open)); mapApply(); }
 function renderDrawer(focus) {
   const el = $('#drawer'), r = S.byUid.get(S.open);
   if (!r) { el.hidden = true; $('#scrim').hidden = true; return; }
@@ -768,7 +922,7 @@ function renderDrawer(focus) {
   }).join('') : `<p class="state-box">${STATES.includes(st) ? 'Este reclamo ya está cerrado: es el estado final del recorrido.' : 'El estado de este reclamo no es reconocido por el flujo, no hay eventos disponibles.'}</p>`;
   const kv = (k, v) => v === null || v === undefined || v === '' ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`;
   const coords = r._x !== null ? `X ${fmtNum(Math.round(r._x))} · Y ${fmtNum(Math.round(r._y))}` : 'Sin coordenadas';
-  el.innerHTML = `<div class="dr-head"><div><h2>Reclamo #${esc(r['Número'])}</h2><p>Id ${esc(r['Id'])} · ${esc(r['Tipo'] || 'Reclamo')} · ${esc(r['Categoría'] || '')}</p></div><button class="btn btn-sm" type="button" id="dr-close" aria-label="Cerrar detalle">Cerrar</button></div>
+  el.innerHTML = `<div class="dr-head"><div><h2>Reclamo #${esc(r['Número'])}</h2><p>Id ${esc(r['Id'])} · ${esc(r['Tipo'] || 'Reclamo')} · ${esc(r['Categoría'] || '')}</p></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-sm" type="button" id="dr-sel" aria-pressed="${S.sel.has(r._uid)}">${S.sel.has(r._uid) ? '✓ Seleccionado' : 'Seleccionar'}</button><button class="btn btn-sm" type="button" id="dr-close" aria-label="Cerrar detalle">Cerrar</button></div></div>
     <div class="sec"><h3>Estado actual</h3><div class="state-box"><span class="pill lg" data-tone="${TONE[st] || 'gray'}">${esc(st)}</span><p>${esc(STATE_HELP[st] || '')}</p></div></div>
     <div class="sec"><h3>Próximo evento</h3>
       <div class="role-wrap" style="margin-bottom:12px"><span id="dr-role-lbl">Simular rol</span><div class="seg" role="radiogroup" aria-labelledby="dr-role-lbl" id="dr-roles">${['Operador', 'Supervisor', 'Laboratorio'].map(x => `<label><input type="radio" name="role2" value="${x}" ${S.role === x ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
@@ -791,11 +945,12 @@ function renderDrawer(focus) {
 /* ───────── barra de selección ───────── */
 function renderBulk() {
   const b = $('#bulk'), n = S.sel.size;
-  if (!n || S.view !== 'lista') { b.hidden = true; return; }
+  if (!n || S.view === 'eventos') { b.hidden = true; return; }
   const elig = [...S.sel].map(u => S.byUid.get(u)).filter(r => r && nextEvents(r).includes('asignar')).length;
   const can = EV.asignar.roles.includes(S.role);
-  b.innerHTML = `<strong>${n} seleccionado(s)</strong><span>${elig} pueden asignarse</span>
+  b.innerHTML = `<strong>${fmtNum(n)} seleccionado(s)</strong><span>${fmtNum(elig)} pueden asignarse</span>
     <button class="btn btn-light" type="button" id="bulk-assign" ${can && elig ? '' : 'disabled'}>Nuevo evento · Asignar equipo</button>
+    ${S.view === 'lista' ? `<button class="btn btn-ghost" type="button" id="bulk-map">Ver en el mapa</button>` : ''}
     <button class="btn btn-ghost" type="button" id="bulk-clear">Quitar selección</button>`;
   b.hidden = false;
 }
@@ -970,7 +1125,7 @@ function openNewClaim() {
       S.rows.push(r); S.byUid.set(r._uid, r);
       const log = {ts: now, id: nid, numero: nnum, evento: 'Ingreso de reclamo', de: '', a: 'En curso', equipo: '', rol: S.role, obs: ''};
       S.events.push(log); commit([{uid: r._uid, created: true, log}]);
-      S.f = {q: '', estado: '', subtipo: '', distrito: '', vecinal: '', calle: '', origen: '', equipo: '', reit: false}; $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false; S.sort = 'reg-desc'; $('#sort').value = 'reg-desc'; S.page = 1;
+      S.f = {q: '', estado: '', subtipo: '', distrito: '', vecinal: '', calle: '', origen: '', equipo: '', reit: false}; $('#q').value = ''; $('#f-calle').value = ''; $('#f-reit').checked = false; S.sort = 'reg-desc'; $('#sort').value = 'reg-desc';
       dlg.close(); populateFilters(); renderAll(); openDrawer(r._uid); toast(`Reclamo #${nnum} ingresado en estado EN CURSO`, true);
     };
   });
@@ -1028,7 +1183,7 @@ function renderView() {
 function renderAll() {
   renderStatus(); renderSummary(); renderView(); renderBulk(); if (S.open) { if (S.byUid.has(S.open)) renderDrawer(); else { S.open = null; renderDrawer(); } }
 }
-function refilter() { S.page = 1; MAP.fit = true; renderSummary(); renderView(); renderBulk(); }
+function refilter() { MAP.fit = true; renderSummary(); renderView(); renderBulk(); }
 
 let qT;
 $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.f.q = e.target.value; refilter(); }, 150); });
@@ -1036,7 +1191,7 @@ let cT;
 $('#f-calle').addEventListener('input', e => { clearTimeout(cT); cT = setTimeout(() => { S.f.calle = e.target.value; refilter(); }, 150); });
 [['#f-subtipo', 'subtipo'], ['#f-distrito', 'distrito'], ['#f-vecinal', 'vecinal'], ['#f-origen', 'origen'], ['#f-equipo', 'equipo']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.f[k] = e.target.value; refilter(); }));
 $('#f-reit').addEventListener('change', e => { S.f.reit = e.target.checked; refilter(); });
-$('#sort').addEventListener('change', e => { S.sort = e.target.value; S.page = 1; renderView(); });
+$('#sort').addEventListener('change', e => { S.sort = e.target.value; renderView(); });
 function setRole(role, fromDrawer) {
   S.role = role;
   $$('#roles input').forEach(i => { i.checked = i.value === role; });
@@ -1056,18 +1211,26 @@ $('#status').addEventListener('click', e => { if (e.target.closest('#btn-undo'))
 $('#msgs').addEventListener('click', e => { if (e.target.closest('[data-dismiss]')) showMsgs(''); if (e.target.closest('[data-load]')) $('#file').click(); });
 $('#view-lista').addEventListener('click', e => {
   const o = e.target.closest('[data-open]'); if (o) return openDrawer(+o.dataset.open, o);
-  const p = e.target.closest('[data-pg]'); if (p) { S.page += +p.dataset.pg; renderList(); $('#view-lista').scrollIntoView({block: 'nearest'}); }
+  if (e.target.closest('[data-selall]')) { filtered().forEach(r => S.sel.add(r._uid)); afterSel(); }
+  if (e.target.closest('[data-selnone]')) { S.sel = new Set(); afterSel(); }
 });
 $('#view-lista').addEventListener('change', e => {
-  if (e.target.id === 'sel-all') { const a = filtered(); if (e.target.checked) a.forEach(r => S.sel.add(r._uid)); else a.forEach(r => S.sel.delete(r._uid)); renderList(); renderBulk(); return; }
-  const s = e.target.closest('[data-sel]'); if (s) { const u = +s.dataset.sel; if (s.checked) S.sel.add(u); else S.sel.delete(u); renderList(); renderBulk(); }
+  if (e.target.id === 'sel-all') { const a = filtered(); if (e.target.checked) a.forEach(r => S.sel.add(r._uid)); else a.forEach(r => S.sel.delete(r._uid)); afterSel(); return; }
+  const s = e.target.closest('[data-sel]');
+  if (s) { const u = +s.dataset.sel; if (s.checked) S.sel.add(u); else S.sel.delete(u); s.closest('tr').classList.toggle('is-sel', s.checked); syncSelUI(); }
 });
 $('#view-eventos').addEventListener('click', e => { const o = e.target.closest('[data-open]'); if (o) openDrawer(+o.dataset.open, o); });
-$('#drawer').addEventListener('click', e => { if (e.target.closest('#dr-close')) closeDrawer(); const b = e.target.closest('[data-ev]'); if (b && !b.disabled) openEvent(b.dataset.ev); });
+$('#drawer').addEventListener('click', e => {
+  if (e.target.closest('#dr-sel') && S.open) { if (S.sel.has(S.open)) S.sel.delete(S.open); else S.sel.add(S.open); afterSel(); $('#dr-sel').focus(); return; }
+  if (e.target.closest('#dr-close')) closeDrawer(); const b = e.target.closest('[data-ev]'); if (b && !b.disabled) openEvent(b.dataset.ev); });
 $('#scrim').addEventListener('click', closeDrawer);
-$('#bulk').addEventListener('click', e => { if (e.target.closest('#bulk-clear')) { S.sel = new Set(); renderList(); renderBulk(); } if (e.target.closest('#bulk-assign')) openBulkAssign(); });
+$('#bulk').addEventListener('click', e => {
+  if (e.target.closest('#bulk-clear')) { S.sel = new Set(); afterSel(); }
+  if (e.target.closest('#bulk-assign')) openBulkAssign();
+  if (e.target.closest('#bulk-map')) { S.onlySel = true; S.view = 'mapa'; MAP.fit = true; renderView(); renderBulk(); }
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.open && !dlg.open) closeDrawer(); });
-bindMap();
+bindMap(); bindMapBar();
 window.addEventListener('resize', () => { if (S.view === 'mapa' && $('#map-svg')) { mapMeasure(); mapApply(); } });
 window.addEventListener('beforeunload', e => { if (dirty() && !S.sample) { e.preventDefault(); e.returnValue = ''; } });
 
