@@ -128,7 +128,14 @@ main{padding-block:16px 120px;display:flex;flex-direction:column;gap:14px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .tbl-wrap{overflow:auto}
 #view-lista .tbl-wrap{max-height:max(420px,calc(100vh - 260px))}
-table{border-collapse:collapse;width:100%;min-width:980px}
+table{border-collapse:collapse;width:100%;min-width:1180px}
+.th-sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;border-radius:4px}
+.th-sort:hover{color:var(--fg)}
+.th-sort:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.th-sort .ar{font-size:10px;opacity:.35}
+th[aria-sort] .th-sort{color:var(--fg)}
+th[aria-sort] .th-sort .ar{opacity:1}
+td.coord{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
 th{position:sticky;top:0;z-index:1;text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);padding:9px 12px;white-space:nowrap;font-weight:600}
 td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
 tbody tr:hover{background:color-mix(in srgb,var(--soft) 60%,transparent)}
@@ -172,6 +179,26 @@ td.num,th.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 #lmap{position:absolute;inset:0;background:var(--soft);font:inherit}
 .leaflet-container{font:13px/1.4 var(--font)}
 .leaflet-tooltip{font-size:12.5px}
+.leaflet-tooltip.map-lbl{background:#fff;color:#14213D;border:1.5px solid #1A2A4A;border-left-width:4px;border-radius:4px;padding:1px 6px;font:600 11.5px/1.35 var(--font);box-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap}
+.leaflet-tooltip.map-lbl::before{display:none}
+.leaflet-tooltip.map-lbl.is-sel{border-color:#2F6FDE;background:#EAF1FD}
+.leaflet-tooltip.map-lbl.is-open{border-color:#000;background:#FFF7D6}
+.lbl-short .map-lbl .lbl-addr{display:none}
+.map-lbl.tone-amber{border-left-color:var(--amber-fg)}.map-lbl.tone-slate{border-left-color:var(--slate-fg)}.map-lbl.tone-green{border-left-color:var(--green-fg)}.map-lbl.tone-gray{border-left-color:var(--gray-fg)}
+.print-only{display:none}
+.print-head{padding:0 0 8px}
+.print-head h2{margin:0;font:700 18px/1.2 var(--display)}
+.print-head p{margin:2px 0 0;font-size:12px;color:#333}
+@media print{
+  @page{size:landscape;margin:10mm}
+  body.print-map{background:#fff!important;color:#000}
+  body.print-map::before,body.print-map .top,body.print-map #status,body.print-map #msgs,body.print-map #summary,body.print-map .toolbar,body.print-map #view-lista,body.print-map #view-eventos,body.print-map .map-bar,body.print-map #bulk,body.print-map #toast,body.print-map #drawer,body.print-map #scrim,body.print-map .leaflet-control-zoom,body.print-map #tile-note,body.print-map .map-tools,body.print-map .map-note{display:none!important}
+  body.print-map main{padding:0!important;max-width:none}
+  body.print-map #view-mapa{border:0;border-radius:0;overflow:visible;zoom:var(--pz,1)}
+  body.print-map .print-only{display:block}
+  body.print-map .map-box{width:var(--pw)!important;height:var(--ph)!important;border:1px solid #888;break-inside:avoid}
+  body.print-map *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 .clu{display:flex;align-items:center;justify-content:center;border-radius:50%;background:color-mix(in srgb,var(--navy) 88%,transparent);color:#fff;font:700 13px var(--font);border:3px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.35);position:relative}
 .clu.sel{border-color:#2F6FDE;box-shadow:0 0 0 3px rgba(47,111,222,.45),0 2px 6px rgba(0,0,0,.35)}
 .clu small{position:absolute;top:-8px;right:-10px;background:#2F6FDE;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;line-height:17px;border:2px solid #fff}
@@ -304,6 +331,7 @@ dialog::backdrop{background:rgba(10,16,28,.5)}
       <option value="reg-asc">Más antiguos primero</option>
       <option value="reit-desc">Más reiteraciones</option>
       <option value="num-asc">Número</option>
+      <option value="custom" hidden disabled>Orden por columna</option>
     </select>
     <span class="spacer"></span>
     <div class="seg" role="group" aria-label="Vista" id="views">
@@ -464,9 +492,9 @@ const S = {
   fileName: '', sample: false, rev: 0, savedRev: 0,
   f: {q:'', estado:'', subtipo:'', distrito:'', origen:'', equipo:'', reit:false}, sort: 'reg-desc',
   sel: new Set(), open: null, role: 'Operador', view: 'lista', opener: null,
-  cluster: false, onlySel: false
+  cluster: false, onlySel: false, labels: true
 };
-try { S.cluster = localStorage.getItem('sra-cluster') === '1'; } catch (e) {}
+try { S.cluster = localStorage.getItem('sra-cluster') === '1'; S.labels = localStorage.getItem('sra-labels') !== '0'; } catch (e) {}
 const dirty = () => S.rev !== S.savedRev;
 
 /* ───────── carga de la planilla ───────── */
@@ -627,12 +655,28 @@ function filtered() {
   });
   const t = d => isDate(d) ? d.getTime() : 0;
   const [k, dir] = S.sort.split('-'), m = dir === 'asc' ? 1 : -1;
+  const get = SORT_GET[k] || SORT_GET.num, isStr = SORT_STR.has(k);
+  const blank = v => v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v));
   a.sort((x, y) => {
-    if (k === 'reg') return m * (t(x['Fecha hora registro']) - t(y['Fecha hora registro']));
-    if (k === 'reit') return m * ((Number(x['Reiteraciones']) || 0) - (Number(y['Reiteraciones']) || 0)) || (t(x['Fecha hora registro']) - t(y['Fecha hora registro']));
-    return m * ((Number(x['Número']) || 0) - (Number(y['Número']) || 0));
+    const vx = get(x), vy = get(y), bx = blank(vx), by = blank(vy);
+    if (bx || by) { if (bx && by) return t(y['Fecha hora registro']) - t(x['Fecha hora registro']); return bx ? 1 : -1; } // vacíos siempre al final
+    const c = isStr ? String(vx).localeCompare(String(vy), 'es', {numeric: true, sensitivity: 'base'}) : vx - vy;
+    if (c) return m * c;
+    if (k === 'dir') return m * ((Number(x['Altura']) || 0) - (Number(y['Altura']) || 0));
+    return t(y['Fecha hora registro']) - t(x['Fecha hora registro']);
   });
   return a;
+}
+const SORT_GET = {
+  num: r => Number(r['Número']), estado: r => { const i = STATES.indexOf(r['Estado detallado']); return i < 0 ? 99 : i; },
+  subtipo: r => r['Subtipo'], dir: r => r['Calle'], reg: r => isDate(r['Fecha hora registro']) ? r['Fecha hora registro'].getTime() : null,
+  reit: r => Number(r['Reiteraciones']) || 0, x: r => r._x, y: r => r._y, tui: r => r['Tipo última intervención'], equipo: r => r['Último equipo asignado']
+};
+const SORT_STR = new Set(['subtipo', 'dir', 'tui', 'equipo']);
+function setSort(v) {
+  S.sort = v;
+  const sel = $('#sort'); sel.value = [...sel.options].some(o => o.value === v && !o.disabled) ? v : 'custom';
+  renderView();
 }
 function fillSelect(id, label, values) {
   const el = $(id), cur = el.value;
@@ -683,8 +727,16 @@ function rowHTML(r) {
     <td>${esc(addr(r))}<div class="sub">${esc([r['Ident. Barrio'] || r['Vecinal'], r['Distrito']].filter(Boolean).join(' · '))}</div></td>
     <td class="num">${fmtDT(r['Fecha hora registro'])}<div class="sub">${ageText(r['Fecha hora registro'])}</div></td>
     <td class="num">${reit > 0 ? `<span class="badge">${reit}</span>` : '—'}</td>
+    <td class="coord">${fmtCoord(r._x)}</td><td class="coord">${fmtCoord(r._y)}</td>
     <td>${esc(r['Tipo última intervención'] || '—')}</td>
     <td>${esc(r['Último equipo asignado'] || '—')}</td></tr>`;
+}
+const fmtCoord = v => v === null || v === undefined ? '—' : v.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const COLS_LIST = [['num', 'Número'], ['estado', 'Estado'], ['subtipo', 'Subtipo'], ['dir', 'Dirección'], ['reg', 'Registro'], ['reit', 'Reit.'], ['x', 'Coord. X'], ['y', 'Coord. Y'], ['tui', 'Última intervención'], ['equipo', 'Equipo']];
+function thSort([k, label]) {
+  const [ck, cd] = S.sort.split('-'), on = ck === k;
+  const aria = on ? ` aria-sort="${cd === 'asc' ? 'ascending' : 'descending'}"` : '';
+  return `<th${aria}><button class="th-sort" type="button" data-sort="${k}" title="Ordenar por ${esc(label)}">${esc(label)}<span class="ar" aria-hidden="true">${on ? (cd === 'asc' ? '▲' : '▼') : '▼'}</span></button></th>`;
 }
 function listFooter(a) {
   const nSel = a.filter(r => S.sel.has(r._uid)).length;
@@ -701,10 +753,10 @@ function syncSelUI() {
 function renderList() {
   const a = filtered();
   const allSel = a.length && a.every(r => S.sel.has(r._uid)), someSel = a.some(r => S.sel.has(r._uid));
-  const body = a.length ? a.map(rowHTML).join('') : `<tr><td colspan="9"><div class="empty">Ningún reclamo coincide con los filtros.</div></td></tr>`;
+  const body = a.length ? a.map(rowHTML).join('') : `<tr><td colspan="11"><div class="empty">Ningún reclamo coincide con los filtros.</div></td></tr>`;
   $('#view-lista').innerHTML = `<div class="tbl-wrap"><table><thead><tr>
     <th class="c-chk"><input type="checkbox" id="sel-all" aria-label="Seleccionar todos los reclamos filtrados" ${allSel ? 'checked' : ''}></th>
-    <th>Número</th><th>Estado</th><th>Subtipo</th><th>Dirección</th><th>Registro</th><th>Reit.</th><th>Última intervención</th><th>Equipo</th></tr></thead>
+    ${COLS_LIST.map(thSort).join('')}</tr></thead>
     <tbody>${body}</tbody></table></div>
     <div class="pager">${listFooter(a)}</div>`;
   const cb = $('#sel-all'); if (cb) cb.indeterminate = !allSel && someSel;
@@ -725,7 +777,7 @@ const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(
 
 function renderMap() {
   const host = $('#view-mapa');
-  if (!$('#map-bar', host)) host.innerHTML = `<div class="map-bar" id="map-bar"></div><div id="map-body"></div>`;
+  if (!$('#map-bar', host)) host.innerHTML = `<div class="print-only print-head" id="map-print-head"></div><div class="map-bar" id="map-bar"></div><div id="map-body"></div>`;
   const all = filtered();
   const base = S.onlySel ? all.filter(r => S.sel.has(r._uid)) : all;
   const leaflet = hasLeaflet();
@@ -744,7 +796,9 @@ function renderMapBar(nBase, nPts, leaflet) {
     <label class="switch" title="${hasCluster() ? 'Agrupa los reclamos cercanos en un círculo con la cantidad' : 'No se pudo cargar el agrupador'}"><input type="checkbox" role="switch" id="sw-cluster" ${S.cluster && hasCluster() ? 'checked' : ''} ${hasCluster() ? '' : 'disabled'}><span class="trk" aria-hidden="true"></span><span>Agrupar reclamos</span></label>
     <label class="switch"><input type="checkbox" role="switch" id="sw-onlysel" ${S.onlySel ? 'checked' : ''} ${nSelMap || S.onlySel ? '' : 'disabled'}><span class="trk" aria-hidden="true"></span><span>Solo seleccionados${nSelMap ? ` (${fmtNum(nSelMap)})` : ''}</span></label>
     ${leaflet ? `<button class="btn btn-sm" type="button" id="map-selvis" ${nPts ? '' : 'disabled'}>Seleccionar los visibles en el mapa</button>` : ''}
+    ${leaflet ? `<label class="switch"><input type="checkbox" role="switch" id="sw-labels" ${S.labels ? 'checked' : ''}><span class="trk" aria-hidden="true"></span><span>Etiquetas</span></label>` : ''}
     <button class="btn btn-sm" type="button" id="map-fit" ${nPts ? '' : 'disabled'}>Ver todo</button>
+    <button class="btn btn-sm btn-navy" type="button" id="map-print" ${nPts ? '' : 'disabled'}>🖨 Imprimir mapa</button>
     <span class="info">${fmtNum(nPts)} en el mapa${nBase > nPts ? ` · ${fmtNum(nBase - nPts)} sin coordenadas` : ''}${leaflet ? ' · Shift+clic en un punto para seleccionarlo' : ''}</span>
     <span class="legend">${legend}</span>`;
   if (act && $('#' + act)) $('#' + act).focus();
@@ -769,6 +823,8 @@ function leafletRender(pts) {
     LM.tiles.on('tileload', () => { LM.tileOk = true; const n = $('#tile-note'); if (n) n.hidden = true; });
     LM.tiles.on('tileerror', () => { if (!LM.tileOk && ++LM.tileErr >= 4) { const n = $('#tile-note'); if (n) n.hidden = false; } });
     if (window.ResizeObserver) new ResizeObserver(() => LM.map && LM.map.invalidateSize()).observe($('#lmap'));
+    const lblMode = () => { const el = $('#lmap'); if (el) el.classList.toggle('lbl-short', LM.map.getZoom() < 15); };
+    LM.map.on('zoomend', lblMode); lblMode();
   }
   LM.map.invalidateSize();
   if (LM.layer) LM.map.removeLayer(LM.layer);
@@ -776,7 +832,14 @@ function leafletRender(pts) {
   LM.layer = useCl ? L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 55, spiderfyOnMaxZoom: true, chunkedLoading: true, iconCreateFunction: cluIcon}) : L.featureGroup();
   const ms = pts.map(r => {
     const m = L.circleMarker(r._ll, dotStyle(r)); m._uid = r._uid;
-    m.bindTooltip(`<strong>#${esc(r['Número'])}</strong> · ${esc(r['Estado detallado'])}${S.sel.has(r._uid) ? ' · seleccionado' : ''}<br>${esc(addr(r))}`, {direction: 'top', offset: [0, -6]});
+    if (S.labels) {
+      const tone = TONE[r['Estado detallado']] || 'gray';
+      m.bindTooltip(`<b>#${esc(r['Número'])}</b><span class="lbl-addr"> · ${esc(addr(r))}</span>`,
+        {permanent: true, direction: 'right', offset: [9, 0], interactive: false, opacity: 1,
+         className: `map-lbl tone-${tone}${S.sel.has(r._uid) ? ' is-sel' : ''}${r._uid === S.open ? ' is-open' : ''}`});
+    } else {
+      m.bindTooltip(`<strong>#${esc(r['Número'])}</strong> · ${esc(r['Estado detallado'])}${S.sel.has(r._uid) ? ' · seleccionado' : ''}<br>${esc(addr(r))}`, {direction: 'top', offset: [0, -6]});
+    }
     m.on('click', e => {
       const oe = e.originalEvent || {};
       if (oe.shiftKey || oe.ctrlKey || oe.metaKey) { if (S.sel.has(r._uid)) S.sel.delete(r._uid); else S.sel.add(r._uid); afterSel(); }
@@ -795,6 +858,30 @@ function mapFitAll() {
     if (lls.length) LM.map.fitBounds(L.latLngBounds(lls), {paddingTopLeft: [30, 40], paddingBottomRight: [30, S.sel.size ? 100 : 30], maxZoom: 17});
   } else if ($('#map-svg')) { MAP.moved = false; mapMeasure(); mapFit(); mapApply(); }
 }
+/* Imprime el recuadro del mapa tal como se ve: mismo tamaño, zoom y encuadre, escalado para entrar en una hoja apaisada. */
+function filterSummary() {
+  const f = S.f, out = [];
+  if (f.estado) out.push('Estado: ' + (f.estado === '__otros' ? 'sin reconocer' : f.estado));
+  [['subtipo', 'Subtipo'], ['distrito', 'Distrito'], ['vecinal', 'Vecinal'], ['calle', 'Calle'], ['origen', 'Origen'], ['equipo', 'Equipo'], ['q', 'Búsqueda']].forEach(([k, l]) => { if (f[k]) out.push(`${l}: ${f[k]}`); });
+  if (f.reit) out.push('Con reiteraciones');
+  if (S.onlySel) out.push('Solo seleccionados');
+  return out.join(' · ');
+}
+function printMap() {
+  const box = $('#view-mapa .map-box'); if (!box) return;
+  const b = box.getBoundingClientRect();
+  const nPts = hasLeaflet() && LM.layer ? LM.layer.getLayers().length : MAP.pts.length;
+  const fs = filterSummary();
+  $('#map-print-head').innerHTML = `<h2>Reclamos en el mapa</h2><p>${esc(fmtDT(new Date()))} · ${esc(S.fileName || '')} · ${fmtNum(nPts)} reclamo(s) en el mapa${fs ? ' · ' + esc(fs) : ''}</p>
+    <p>${STATES.map(s => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 10px;background:${cssVar('--' + TONE[s] + '-fg')}"></span>${esc(s)}`).join('')}</p>`;
+  const z = Math.min(1, 1040 / b.width, 640 / b.height);
+  const st = document.body.style;
+  st.setProperty('--pw', b.width + 'px'); st.setProperty('--ph', b.height + 'px'); st.setProperty('--pz', z);
+  document.body.classList.add('print-map');
+  const done = () => { document.body.classList.remove('print-map'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { try { window.print(); } catch (e) { done(); toast('Este visor no permite imprimir. Abrí la página en el navegador.'); } }, 60);
+}
 function selectVisible() {
   if (!LM.map) return;
   const b = LM.map.getBounds(); let n = 0;
@@ -811,11 +898,13 @@ function bindMapBar() {
   const host = $('#view-mapa');
   host.addEventListener('change', e => {
     if (e.target.id === 'sw-cluster') { S.cluster = e.target.checked; try { localStorage.setItem('sra-cluster', S.cluster ? '1' : '0'); } catch (x) {} renderMap(); }
+    if (e.target.id === 'sw-labels') { S.labels = e.target.checked; try { localStorage.setItem('sra-labels', S.labels ? '1' : '0'); } catch (x) {} renderMap(); }
     if (e.target.id === 'sw-onlysel') { S.onlySel = e.target.checked; MAP.fit = true; renderMap(); renderBulk(); }
   });
   host.addEventListener('click', e => {
     if (e.target.closest('#map-selvis')) selectVisible();
     if (e.target.closest('#map-fit')) mapFitAll();
+    if (e.target.closest('#map-print')) printMap();
   });
 }
 
@@ -1191,7 +1280,7 @@ let cT;
 $('#f-calle').addEventListener('input', e => { clearTimeout(cT); cT = setTimeout(() => { S.f.calle = e.target.value; refilter(); }, 150); });
 [['#f-subtipo', 'subtipo'], ['#f-distrito', 'distrito'], ['#f-vecinal', 'vecinal'], ['#f-origen', 'origen'], ['#f-equipo', 'equipo']].forEach(([id, k]) => $(id).addEventListener('change', e => { S.f[k] = e.target.value; refilter(); }));
 $('#f-reit').addEventListener('change', e => { S.f.reit = e.target.checked; refilter(); });
-$('#sort').addEventListener('change', e => { S.sort = e.target.value; renderView(); });
+$('#sort').addEventListener('change', e => setSort(e.target.value));
 function setRole(role, fromDrawer) {
   S.role = role;
   $$('#roles input').forEach(i => { i.checked = i.value === role; });
@@ -1211,6 +1300,12 @@ $('#status').addEventListener('click', e => { if (e.target.closest('#btn-undo'))
 $('#msgs').addEventListener('click', e => { if (e.target.closest('[data-dismiss]')) showMsgs(''); if (e.target.closest('[data-load]')) $('#file').click(); });
 $('#view-lista').addEventListener('click', e => {
   const o = e.target.closest('[data-open]'); if (o) return openDrawer(+o.dataset.open, o);
+  const so = e.target.closest('[data-sort]');
+  if (so) {
+    const k = so.dataset.sort, [ck, cd] = S.sort.split('-');
+    const dir = ck === k ? (cd === 'asc' ? 'desc' : 'asc') : (SORT_STR.has(k) || k === 'estado' ? 'asc' : 'desc');
+    setSort(`${k}-${dir}`); const b = $(`#view-lista [data-sort="${k}"]`); if (b) b.focus(); return;
+  }
   if (e.target.closest('[data-selall]')) { filtered().forEach(r => S.sel.add(r._uid)); afterSel(); }
   if (e.target.closest('[data-selnone]')) { S.sel = new Set(); afterSel(); }
 });
